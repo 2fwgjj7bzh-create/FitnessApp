@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { saveWorkout, getPrograms, getWorkouts, saveProgram } from '../storage';
-import { uid, formatDateLong, formatDate } from '../utils/helpers';
+import { uid, formatDateLong } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
@@ -40,6 +40,7 @@ export default function WorkoutSessionScreen() {
   const [showLogbook, setShowLogbook] = useState(false);
   const [pastSessions, setPastSessions] = useState<Workout[]>([]);
   const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const pid = route.params?.programId;
@@ -158,42 +159,49 @@ export default function WorkoutSessionScreen() {
   }, [navigation]);
 
   const handleFinish = async () => {
+    if (saving) return;
     if (exercises.length === 0) {
       Alert.alert('Séance vide', 'Ajoute au moins un exercice avant de terminer.');
       return;
     }
-    const now = new Date().toISOString();
-    await saveWorkout({
-      id: uid(),
-      name: workoutName,
-      date: now,
-      duration: 0,
-      exercises,
-      notes,
-      programId: currentProgramId,
-    });
-    // Sync exercises back to program template so calendar stays accurate
-    if (currentProgramId) {
-      const progList = await getPrograms();
-      const prog = progList.find(p => p.id === currentProgramId);
-      if (prog) {
-        const programExercises: ProgramExercise[] = exercises.map(ex => ({
-          id: ex.id,
-          name: ex.name,
-          muscleGroup: ex.muscleGroup,
-          sets: ex.sets.map(s => ({
-            id: s.id,
-            repsRange: s.targetRepsRange ?? (s.reps > 0 ? String(s.reps) : '8-12'),
-          })),
-          targetWeight: ex.sets.find(s => s.weight > 0)?.weight,
-          restSeconds: ex.restSeconds,
-          videoUrl: ex.videoUrl,
-          notes: ex.notes,
-        }));
-        await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
+    setSaving(true);
+    try {
+      const now = new Date().toISOString();
+      await saveWorkout({
+        id: uid(),
+        name: workoutName,
+        date: now,
+        duration: 0,
+        exercises,
+        notes,
+        programId: currentProgramId,
+      });
+      if (currentProgramId) {
+        const progList = await getPrograms();
+        const prog = progList.find(p => p.id === currentProgramId);
+        if (prog) {
+          const programExercises: ProgramExercise[] = exercises.map(ex => ({
+            id: ex.id,
+            name: ex.name,
+            muscleGroup: ex.muscleGroup,
+            sets: ex.sets.map(s => ({
+              id: s.id,
+              repsRange: s.targetRepsRange ?? (s.reps > 0 ? String(s.reps) : '8-12'),
+            })),
+            targetWeight: ex.sets.find(s => s.weight > 0)?.weight,
+            restSeconds: ex.restSeconds,
+            videoUrl: ex.videoUrl,
+            notes: ex.notes,
+          }));
+          await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
+        }
       }
+    } catch (e) {
+      console.error('[handleFinish]', e);
+    } finally {
+      setSaving(false);
+      navigation.goBack();
     }
-    navigation.goBack();
   };
 
   const handleCancel = () => {
@@ -229,8 +237,12 @@ export default function WorkoutSessionScreen() {
               <Ionicons name="book-outline" size={18} color={colors.info} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
-            <Text style={styles.finishBtnText}>Terminer</Text>
+          <TouchableOpacity
+            style={[styles.finishBtn, saving && { opacity: 0.5 }]}
+            onPress={handleFinish}
+            disabled={saving}
+          >
+            <Text style={styles.finishBtnText}>{saving ? 'Sauvegarde...' : 'Terminer'}</Text>
           </TouchableOpacity>
         </View>
 
