@@ -514,15 +514,22 @@ const cardStyles = StyleSheet.create({
 
 type Formula = 'brzycki' | 'epley';
 
+// Brzycki est fiable uniquement jusqu'à 10 reps — au-delà le dénominateur (37-r) devient trop petit
+function effectiveFormula(f: Formula, r: number): Formula {
+  return f === 'brzycki' && r > 10 ? 'epley' : f;
+}
+
 function oneRM(w: number, r: number, f: Formula): number {
   if (r === 1) return w;
-  if (f === 'epley') return w * (1 + r / 30);
-  return w * 36 / (37 - r); // Brzycki
+  const ef = effectiveFormula(f, r);
+  if (ef === 'epley') return w * (1 + r / 30);
+  return w * 36 / (37 - r); // Brzycki (r ≤ 10)
 }
 
 function pctAt(reps: number, f: Formula): number {
-  if (f === 'epley') return 1 / (1 + reps / 30);
-  return (37 - reps) / 36; // Brzycki
+  const ef = effectiveFormula(f, reps);
+  if (ef === 'epley') return 1 / (1 + reps / 30);
+  return (37 - reps) / 36; // Brzycki (reps ≤ 10)
 }
 
 function RMCalculator() {
@@ -593,9 +600,16 @@ function RMCalculator() {
           {max !== null ? `${(Math.round(max * 10) / 10).toFixed(1)} kg` : '—'}
         </Text>
         {valid && (
-          <Text style={calcStyles.resultSub}>
-            {w} kg × {r} rép{r > 1 ? 's' : ''} · {formula === 'brzycki' ? 'Brzycki' : 'Epley'}
-          </Text>
+          <>
+            <Text style={calcStyles.resultSub}>
+              {w} kg × {r} rép{r > 1 ? 's' : ''} · {effectiveFormula(formula, r) === 'brzycki' ? 'Brzycki' : 'Epley'}
+            </Text>
+            {formula === 'brzycki' && r > 10 && (
+              <Text style={calcStyles.resultWarn}>
+                ⚠️ Brzycki invalide au-delà de 10 reps — Epley utilisé
+              </Text>
+            )}
+          </>
         )}
       </View>
 
@@ -673,6 +687,7 @@ const calcStyles = StyleSheet.create({
   resultLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.sm },
   resultValue: { fontSize: 52, fontWeight: '800' as const, color: colors.primary, letterSpacing: -1 },
   resultSub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm },
+  resultWarn: { ...typography.caption, color: colors.warning, marginTop: spacing.xs, textAlign: 'center' },
   table: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
     overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder,
