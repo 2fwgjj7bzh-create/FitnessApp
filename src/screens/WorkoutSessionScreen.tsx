@@ -1,0 +1,721 @@
+import React, { useCallback, useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
+  KeyboardAvoidingView, Platform, Modal, FlatList, Linking,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, borderRadius, typography, shadows } from '../theme';
+import { saveWorkout, getPrograms } from '../storage';
+import { uid } from '../utils/helpers';
+import { Exercise, ExerciseSet, WorkoutStackParamList } from '../types';
+import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, ExerciseTemplate } from '../data/exerciseDatabase';
+
+type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutSession'>;
+type RoutePropType = RouteProp<WorkoutStackParamList, 'WorkoutSession'>;
+
+const REST_OPTIONS = [30, 60, 90, 120, 180, 240, 300];
+
+function formatRest(sec?: number) {
+  if (!sec) return null;
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s === 0 ? `${m}min` : `${m}min${s}s`;
+}
+
+export default function WorkoutSessionScreen() {
+  const navigation = useNavigation<NavProp>();
+  const route = useRoute<RoutePropType>();
+
+  const [workoutName, setWorkoutName] = useState('Séance du jour');
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [notes, setNotes] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerGroup, setPickerGroup] = useState('Tous');
+
+  useEffect(() => {
+    const pid = route.params?.programId;
+    if (pid) {
+      getPrograms().then(list => {
+        const prog = list.find(p => p.id === pid);
+        if (prog) {
+          setWorkoutName(prog.name);
+          setExercises(
+            prog.exercises.map(pe => ({
+              id: uid(),
+              name: pe.name,
+              muscleGroup: pe.muscleGroup,
+              videoUrl: pe.videoUrl,
+              restSeconds: pe.restSeconds,
+              // each ProgramSet → one ExerciseSet with its individual repsRange as target
+              sets: pe.sets.map(ps => ({
+                id: uid(),
+                reps: 0,
+                weight: pe.targetWeight ?? 0,
+                completed: false,
+                targetRepsRange: ps.repsRange || undefined,
+              })),
+            }))
+          );
+        }
+      });
+    }
+  }, []);
+
+  const addExercise = (tpl: ExerciseTemplate) => {
+    const ex: Exercise = {
+      id: uid(),
+      name: tpl.name,
+      muscleGroup: tpl.muscleGroup,
+      sets: [{ id: uid(), reps: 0, weight: 0, completed: false }],
+    };
+    setExercises(prev => [...prev, ex]);
+    setShowPicker(false);
+    setPickerSearch('');
+    setPickerGroup('Tous');
+  };
+
+  const addCustomExercise = (name: string) => {
+    const ex: Exercise = {
+      id: uid(),
+      name,
+      sets: [{ id: uid(), reps: 0, weight: 0, completed: false }],
+    };
+    setExercises(prev => [...prev, ex]);
+    setShowPicker(false);
+    setPickerSearch('');
+  };
+
+  const removeExercise = useCallback((exId: string) => {
+    setExercises(prev => prev.filter(e => e.id !== exId));
+  }, []);
+
+  const updateExercise = useCallback((exId: string, patch: Partial<Exercise>) => {
+    setExercises(prev => prev.map(e => e.id === exId ? { ...e, ...patch } : e));
+  }, []);
+
+  const addSet = useCallback((exId: string) => {
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e;
+      const last = e.sets[e.sets.length - 1];
+      return {
+        ...e,
+        sets: [...e.sets, { id: uid(), reps: last?.reps ?? 0, weight: last?.weight ?? 0, completed: false }],
+      };
+    }));
+  }, []);
+
+  const removeSet = useCallback((exId: string, setId: string) => {
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e;
+      if (e.sets.length <= 1) return e;
+      return { ...e, sets: e.sets.filter(s => s.id !== setId) };
+    }));
+  }, []);
+
+  const updateSet = useCallback((exId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: string | boolean) => {
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e;
+      return {
+        ...e,
+        sets: e.sets.map(s => {
+          if (s.id !== setId) return s;
+          if (field === 'completed') return { ...s, completed: value as boolean };
+          const num = parseFloat(value as string);
+          return { ...s, [field]: isNaN(num) ? 0 : num };
+        }),
+      };
+    }));
+  }, []);
+
+  const navigateToHistory = useCallback((name: string) => {
+    navigation.navigate('ExerciseHistory', { exerciseName: name });
+  }, [navigation]);
+
+  const handleFinish = async () => {
+    if (exercises.length === 0) {
+      Alert.alert('Séance vide', 'Ajoute au moins un exercice avant de terminer.');
+      return;
+    }
+    await saveWorkout({
+      id: uid(),
+      name: workoutName,
+      date: new Date().toISOString(),
+      duration: 0,
+      exercises,
+      notes,
+    });
+    navigation.goBack();
+  };
+
+  const handleCancel = () => {
+    Alert.alert('Abandonner', 'Abandonner la séance sans sauvegarder ?', [
+      { text: 'Continuer', style: 'cancel' },
+      { text: 'Abandonner', style: 'destructive', onPress: () => navigation.goBack() },
+    ]);
+  };
+
+  const filtered = EXERCISE_DATABASE.filter(e => {
+    const matchGroup = pickerGroup === 'Tous' || e.muscleGroup === pickerGroup;
+    const matchSearch = !pickerSearch || e.name.toLowerCase().includes(pickerSearch.toLowerCase());
+    return matchGroup && matchSearch;
+  });
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleCancel}>
+            <Ionicons name="close" size={24} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.nameInput}
+            value={workoutName}
+            onChangeText={setWorkoutName}
+            placeholderTextColor={colors.textMuted}
+          />
+          <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
+            <Text style={styles.finishBtnText}>Terminer</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {exercises.map((ex, idx) => (
+            <ExerciseBlock
+              key={ex.id}
+              exercise={ex}
+              index={idx}
+              onRemove={removeExercise}
+              onUpdate={updateExercise}
+              onAddSet={addSet}
+              onRemoveSet={removeSet}
+              onUpdateSet={updateSet}
+              onViewHistory={navigateToHistory}
+            />
+          ))}
+
+          <TouchableOpacity style={styles.addExBtn} onPress={() => setShowPicker(true)}>
+            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+            <Text style={styles.addExText}>Ajouter un exercice</Text>
+          </TouchableOpacity>
+
+          <TextInput
+            style={styles.notesInput}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Notes de séance..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={3}
+          />
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Exercise Picker Modal */}
+      <Modal visible={showPicker} animationType="slide" transparent>
+        <View style={pickerStyles.overlay}>
+          <View style={pickerStyles.sheet}>
+            <View style={pickerStyles.handle} />
+            <Text style={pickerStyles.title}>Ajouter un exercice</Text>
+
+            <TextInput
+              style={pickerStyles.search}
+              value={pickerSearch}
+              onChangeText={setPickerSearch}
+              placeholder="Rechercher..."
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+
+            {/* Group filter chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={pickerStyles.groupScroll}>
+              {MUSCLE_GROUPS.map(g => (
+                <TouchableOpacity
+                  key={g}
+                  style={[pickerStyles.groupChip, pickerGroup === g && pickerStyles.groupChipActive]}
+                  onPress={() => setPickerGroup(g)}
+                >
+                  <Text style={[pickerStyles.groupChipText, pickerGroup === g && pickerStyles.groupChipTextActive]}>
+                    {g}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <FlatList
+              data={filtered}
+              keyExtractor={(item, index) => `${item.name}-${index}`}
+              style={{ flex: 1 }}
+              ListHeaderComponent={
+                pickerSearch.length > 0 && !EXERCISE_DATABASE.some(e => e.name.toLowerCase() === pickerSearch.toLowerCase())
+                  ? (
+                    <TouchableOpacity style={pickerStyles.item} onPress={() => addCustomExercise(pickerSearch)}>
+                      <View style={pickerStyles.itemLeft}>
+                        <Ionicons name="add-circle" size={18} color={colors.primary} />
+                        <Text style={[pickerStyles.itemName, { color: colors.primary }]}>Créer "{pickerSearch}"</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )
+                  : null
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity style={pickerStyles.item} onPress={() => addExercise(item)}>
+                  <View style={pickerStyles.itemLeft}>
+                    <Text style={pickerStyles.itemName}>{item.name}</Text>
+                  </View>
+                  <View style={[pickerStyles.groupTag, { backgroundColor: (MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary) + '33' }]}>
+                    <Text style={[pickerStyles.groupTagText, { color: MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary }]}>
+                      {item.muscleGroup}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListFooterComponent={<View style={{ height: 20 }} />}
+            />
+
+            <TouchableOpacity style={pickerStyles.closeBtn} onPress={() => setShowPicker(false)}>
+              <Text style={pickerStyles.closeBtnText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+// ─── Exercise Block ───────────────────────────────────────────────────────────
+
+interface ExerciseBlockProps {
+  exercise: Exercise;
+  index: number;
+  onRemove: (exId: string) => void;
+  onUpdate: (exId: string, patch: Partial<Exercise>) => void;
+  onAddSet: (exId: string) => void;
+  onRemoveSet: (exId: string, setId: string) => void;
+  onUpdateSet: (exId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: string | boolean) => void;
+  onViewHistory: (name: string) => void;
+}
+
+const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, index, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onViewHistory }: ExerciseBlockProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [showRestPicker, setShowRestPicker] = useState(false);
+  const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
+  const hasVideo = !!exercise.videoUrl?.trim();
+
+  const openVideo = () => {
+    const url = exercise.videoUrl?.trim();
+    if (url) Linking.openURL(url).catch(() => Alert.alert('Erreur', 'Impossible d\'ouvrir ce lien.'));
+  };
+
+  const completedCount = exercise.sets.filter(s => s.completed).length;
+
+  return (
+    <View style={exStyles.card}>
+      {/* Exercise header */}
+      <View style={exStyles.header}>
+        <View style={exStyles.headerLeft}>
+          <Text style={exStyles.name} numberOfLines={1}>{exercise.name}</Text>
+          {exercise.muscleGroup && (
+            <View style={[exStyles.muscleTag, { backgroundColor: tagColor + '22' }]}>
+              <Text style={[exStyles.muscleTagText, { color: tagColor }]}>{exercise.muscleGroup}</Text>
+            </View>
+          )}
+        </View>
+        <View style={exStyles.headerRight}>
+          <TouchableOpacity
+            onPress={() => {
+              if (hasVideo) openVideo();
+              else Alert.prompt
+                ? Alert.prompt('Lien vidéo', 'Coller l\'URL de la vidéo :', url => onUpdate(exercise.id, { videoUrl: url }))
+                : onUpdate(exercise.id, { videoUrl: '' });
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name={hasVideo ? 'videocam' : 'videocam-outline'} size={20} color={hasVideo ? colors.info : colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onViewHistory(exercise.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="stats-chart-outline" size={18} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onRemove(exercise.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCollapsed(c => !c)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Cible + repos row */}
+      <View style={exStyles.cibleRow}>
+        <Text style={exStyles.cibleLabel}>Cible</Text>
+        {/* Group sets by same targetRepsRange and show chips */}
+        {(() => {
+          const ranges = exercise.sets
+            .map(s => s.targetRepsRange)
+            .filter((r): r is string => !!r);
+          if (ranges.length === 0 && !exercise.targetRepsRange) return null;
+          // Deduplicate while keeping order
+          const seen = new Map<string, number>();
+          ranges.forEach(r => seen.set(r, (seen.get(r) ?? 0) + 1));
+          const chips = seen.size > 0
+            ? Array.from(seen.entries()).map(([r, n]) => `${n}×${r}`)
+            : exercise.targetRepsRange
+              ? [`${exercise.sets.length}×${exercise.targetRepsRange}`]
+              : [];
+          return chips.map((chip, i) => (
+            <View key={i} style={exStyles.cibleChip}>
+              <Text style={exStyles.cibleChipText}>{chip}</Text>
+            </View>
+          ));
+        })()}
+        <TouchableOpacity style={exStyles.restChip} onPress={() => setShowRestPicker(true)}>
+          <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
+          <Text style={exStyles.restChipText}>
+            {exercise.restSeconds ? formatRest(exercise.restSeconds) : 'Repos'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Rest picker */}
+      {showRestPicker && (
+        <View style={exStyles.restPicker}>
+          {REST_OPTIONS.map(s => (
+            <TouchableOpacity
+              key={s}
+              style={[exStyles.restOption, exercise.restSeconds === s && exStyles.restOptionActive]}
+              onPress={() => { onUpdate(exercise.id, { restSeconds: s }); setShowRestPicker(false); }}
+            >
+              <Text style={[exStyles.restOptionText, exercise.restSeconds === s && exStyles.restOptionTextActive]}>
+                {formatRest(s)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {!collapsed && (
+        <>
+          {/* Column headers */}
+          <View style={exStyles.colRow}>
+            <Text style={[exStyles.colHeader, { width: 36 }]}>Série</Text>
+            <Text style={[exStyles.colHeader, { flex: 1 }]}>Reps</Text>
+            <Text style={[exStyles.colHeader, { flex: 1 }]}>kg</Text>
+          </View>
+
+          {/* Sets */}
+          {exercise.sets.map((set, i) => (
+            <SetRow
+              key={set.id}
+              set={set}
+              index={i}
+              targetRepsRange={set.targetRepsRange ?? exercise.targetRepsRange}
+              onToggle={() => onUpdateSet(exercise.id, set.id, 'completed', !set.completed)}
+              onChangeReps={v => onUpdateSet(exercise.id, set.id, 'reps', v)}
+              onChangeWeight={v => onUpdateSet(exercise.id, set.id, 'weight', v)}
+              onRemove={exercise.sets.length > 1 ? () => onRemoveSet(exercise.id, set.id) : undefined}
+            />
+          ))}
+
+          {/* Footer */}
+          <View style={exStyles.footer}>
+            <TouchableOpacity style={exStyles.footerBtn} onPress={() => onAddSet(exercise.id)}>
+              <Ionicons name="add" size={15} color={colors.primary} />
+              <Text style={exStyles.footerBtnText}>Ajouter une série</Text>
+            </TouchableOpacity>
+            <Text style={exStyles.progressText}>
+              {completedCount}/{exercise.sets.length} séries
+            </Text>
+          </View>
+        </>
+      )}
+    </View>
+  );
+});
+
+// ─── Set Row ─────────────────────────────────────────────────────────────────
+
+interface SetRowProps {
+  set: ExerciseSet;
+  index: number;
+  targetRepsRange?: string;
+  onToggle: () => void;
+  onChangeReps: (v: string) => void;
+  onChangeWeight: (v: string) => void;
+  onRemove?: () => void;
+}
+
+function SetRow({ set, index, targetRepsRange, onToggle, onChangeReps, onChangeWeight, onRemove }: SetRowProps) {
+  return (
+    <View style={[setStyles.row, set.completed && setStyles.rowDone]}>
+      <TouchableOpacity style={[setStyles.circle, set.completed && setStyles.circleDone]} onPress={onToggle}>
+        {set.completed
+          ? <Ionicons name="checkmark" size={16} color="#fff" />
+          : <Text style={setStyles.circleNum}>{index + 1}</Text>
+        }
+      </TouchableOpacity>
+
+      <TextInput
+        style={[setStyles.input, set.completed && setStyles.inputDone]}
+        value={set.reps > 0 ? String(set.reps) : ''}
+        onChangeText={onChangeReps}
+        keyboardType="number-pad"
+        placeholder={targetRepsRange ?? '0'}
+        placeholderTextColor={set.completed ? colors.success + '80' : colors.textMuted}
+        editable={!set.completed}
+      />
+      <TextInput
+        style={[setStyles.input, set.completed && setStyles.inputDone]}
+        value={set.weight > 0 ? String(set.weight) : ''}
+        onChangeText={onChangeWeight}
+        keyboardType="decimal-pad"
+        placeholder="kg"
+        placeholderTextColor={set.completed ? colors.success + '80' : colors.textMuted}
+        editable={!set.completed}
+      />
+      {onRemove && (
+        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="remove-circle-outline" size={18} color={colors.error} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const setStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '55',
+  },
+  rowDone: { opacity: 0.75 },
+  circle: {
+    width: 34, height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleDone: { backgroundColor: colors.success, borderColor: colors.success },
+  circleNum: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
+  input: {
+    flex: 1,
+    backgroundColor: colors.inputBg,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    ...typography.bodyBold,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  inputDone: { color: colors.success },
+});
+
+const exStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    ...shadows.sm,
+  },
+  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
+  headerLeft: { flex: 1, gap: 4 },
+  name: { ...typography.bodyBold, color: colors.text },
+  muscleTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.round,
+  },
+  muscleTagText: { ...typography.tiny, fontWeight: '600' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: 2 },
+  cibleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm, flexWrap: 'wrap' },
+  cibleLabel: { ...typography.caption, color: colors.textMuted },
+  cibleChip: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cibleChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  restChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  restChipText: { ...typography.caption, color: colors.textSecondary },
+  restPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+  },
+  restOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  restOptionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  restOptionText: { ...typography.caption, color: colors.textSecondary },
+  restOptionTextActive: { color: colors.text, fontWeight: '600' },
+  colRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },
+  colHeader: { ...typography.tiny, color: colors.textMuted, fontWeight: '600', textAlign: 'center' },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  footerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  footerBtnText: { ...typography.caption, color: colors.primary, fontWeight: '600' },
+  progressText: { ...typography.caption, color: colors.textMuted },
+});
+
+const pickerStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg,
+    height: '85%',
+  },
+  handle: {
+    width: 40, height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+  },
+  title: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
+  search: {
+    backgroundColor: colors.inputBg,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  groupScroll: { marginBottom: spacing.sm },
+  groupChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.card,
+    marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  groupChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  groupChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  groupChipTextActive: { color: colors.text },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  itemName: { ...typography.body, color: colors.text },
+  groupTag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.round,
+  },
+  groupTagText: { ...typography.tiny, fontWeight: '600' },
+  closeBtn: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.round,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  closeBtnText: { ...typography.bodyBold, color: colors.textSecondary },
+});
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  nameInput: {
+    flex: 1,
+    ...typography.bodyBold,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  finishBtn: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: borderRadius.round,
+  },
+  finishBtnText: { ...typography.bodyBold, color: colors.text },
+  content: { padding: spacing.md },
+  addExBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    borderStyle: 'dashed',
+    padding: spacing.md,
+    justifyContent: 'center',
+    marginVertical: spacing.md,
+  },
+  addExText: { ...typography.bodyBold, color: colors.primary },
+  notesInput: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    ...typography.body,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    textAlignVertical: 'top',
+    minHeight: 72,
+  },
+});

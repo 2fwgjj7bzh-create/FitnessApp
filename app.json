@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "FitnessApp",
+    "slug": "fitness-app",
+    "owner": "soexpo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F0F13"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fitnessapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F0F13"
+      },
+      "package": "com.fitnessapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4ff2498-4ee6-45d5-92ef-25f85ed0cdba"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FitnessApp a besoin d'accéder à vos photos pour les bilans."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c4ff2498-4ee6-45d5-92ef-25f85ed0cdba"
+      }
+    }
+  }
+}

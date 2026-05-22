@@ -1,0 +1,178 @@
+export interface ExerciseTemplate {
+  name: string;
+  muscleGroup: string;
+}
+
+export const EXERCISE_DATABASE: ExerciseTemplate[] = [
+  // ─── Pectoraux ───────────────────────────────────────────────────────────────
+  { name: 'Développé couché barre', muscleGroup: 'Pectoraux' },
+  { name: 'Développé couché haltères', muscleGroup: 'Pectoraux' },
+  { name: 'Développé incliné barre', muscleGroup: 'Pectoraux' },
+  { name: 'Développé incliné haltères', muscleGroup: 'Pectoraux' },
+  { name: 'Développé décliné barre', muscleGroup: 'Pectoraux' },
+  { name: 'Écarté haltères plat', muscleGroup: 'Pectoraux' },
+  { name: 'Écarté haltères incliné', muscleGroup: 'Pectoraux' },
+  { name: 'Écarté poulie haute', muscleGroup: 'Pectoraux' },
+  { name: 'Écarté poulie basse', muscleGroup: 'Pectoraux' },
+  { name: 'Écarté poulie croisé', muscleGroup: 'Pectoraux' },
+  { name: 'Pompes', muscleGroup: 'Pectoraux' },
+  { name: 'Pompes déclinées', muscleGroup: 'Pectoraux' },
+  { name: 'Dips pectoraux', muscleGroup: 'Pectoraux' },
+  { name: 'Pull-over haltère', muscleGroup: 'Pectoraux' },
+  { name: 'Machine pec deck', muscleGroup: 'Pectoraux' },
+  { name: 'Développé machine', muscleGroup: 'Pectoraux' },
+
+  // ─── Dos ─────────────────────────────────────────────────────────────────────
+  { name: 'Soulevé de terre', muscleGroup: 'Dos' },
+  { name: 'Soulevé de terre roumain', muscleGroup: 'Dos' },
+  { name: 'Rowing barre', muscleGroup: 'Dos' },
+  { name: 'Rowing haltère unilatéral', muscleGroup: 'Dos' },
+  { name: 'Rowing câble assis', muscleGroup: 'Dos' },
+  { name: 'Rowing T-bar', muscleGroup: 'Dos' },
+  { name: 'Tirage poulie haute prise large', muscleGroup: 'Dos' },
+  { name: 'Tirage poulie haute prise serrée', muscleGroup: 'Dos' },
+  { name: 'Tirage poulie haute neutre', muscleGroup: 'Dos' },
+  { name: 'Tractions prise large', muscleGroup: 'Dos' },
+  { name: 'Tractions prise serrée', muscleGroup: 'Dos' },
+  { name: 'Tractions supination', muscleGroup: 'Dos' },
+  { name: 'Face pull', muscleGroup: 'Dos' },
+  { name: 'Shrugs barre', muscleGroup: 'Dos' },
+  { name: 'Shrugs haltères', muscleGroup: 'Dos' },
+  { name: 'Good morning', muscleGroup: 'Dos' },
+  { name: 'Hyperextensions', muscleGroup: 'Dos' },
+  { name: 'Rowing machine', muscleGroup: 'Dos' },
+
+  // ─── Épaules ─────────────────────────────────────────────────────────────────
+  { name: 'Développé militaire barre', muscleGroup: 'Épaules' },
+  { name: 'Développé militaire haltères', muscleGroup: 'Épaules' },
+  { name: 'Arnold press', muscleGroup: 'Épaules' },
+  { name: 'Élévation latérale haltères debout', muscleGroup: 'Épaules' },
+  { name: 'Élévation latérale haltères assis', muscleGroup: 'Épaules' },
+  { name: 'Élévation latérale câble', muscleGroup: 'Épaules' },
+  { name: 'Élévation frontale barre', muscleGroup: 'Épaules' },
+  { name: 'Élévation frontale haltères', muscleGroup: 'Épaules' },
+  { name: 'Oiseau haltères', muscleGroup: 'Épaules' },
+  { name: 'Oiseau câble', muscleGroup: 'Épaules' },
+  { name: 'Tirage menton barre', muscleGroup: 'Épaules' },
+  { name: 'Tirage menton câble', muscleGroup: 'Épaules' },
+  { name: 'Développé machine épaules', muscleGroup: 'Épaules' },
+
+  // ─── Biceps ──────────────────────────────────────────────────────────────────
+  { name: 'Curl barre droite', muscleGroup: 'Biceps' },
+  { name: 'Curl barre EZ', muscleGroup: 'Biceps' },
+  { name: 'Curl haltères alternés debout', muscleGroup: 'Biceps' },
+  { name: 'Curl haltères simultané', muscleGroup: 'Biceps' },
+  { name: 'Curl marteau haltères', muscleGroup: 'Biceps' },
+  { name: 'Curl marteau câble', muscleGroup: 'Biceps' },
+  { name: 'Curl câble barre droite', muscleGroup: 'Biceps' },
+  { name: 'Curl câble barre EZ', muscleGroup: 'Biceps' },
+  { name: 'Curl incliné haltères', muscleGroup: 'Biceps' },
+  { name: 'Curl concentration', muscleGroup: 'Biceps' },
+  { name: 'Curl pupitre barre', muscleGroup: 'Biceps' },
+  { name: 'Curl machine', muscleGroup: 'Biceps' },
+
+  // ─── Triceps ─────────────────────────────────────────────────────────────────
+  { name: 'Extension triceps corde poulie', muscleGroup: 'Triceps' },
+  { name: 'Extension triceps barre poulie', muscleGroup: 'Triceps' },
+  { name: 'Extension triceps unilatéral câble', muscleGroup: 'Triceps' },
+  { name: 'Extension triceps nuque haltère', muscleGroup: 'Triceps' },
+  { name: 'Extension triceps nuque barre EZ', muscleGroup: 'Triceps' },
+  { name: 'Skull crusher barre', muscleGroup: 'Triceps' },
+  { name: 'Skull crusher haltères', muscleGroup: 'Triceps' },
+  { name: 'Développé couché prise serrée', muscleGroup: 'Triceps' },
+  { name: 'Dips triceps', muscleGroup: 'Triceps' },
+  { name: 'Kickback haltère', muscleGroup: 'Triceps' },
+  { name: 'Machine triceps', muscleGroup: 'Triceps' },
+
+  // ─── Quadriceps ──────────────────────────────────────────────────────────────
+  { name: 'Squat barre', muscleGroup: 'Quadriceps' },
+  { name: 'Squat haltères', muscleGroup: 'Quadriceps' },
+  { name: 'Goblet squat', muscleGroup: 'Quadriceps' },
+  { name: 'Hack squat machine', muscleGroup: 'Quadriceps' },
+  { name: 'Presse à cuisses', muscleGroup: 'Quadriceps' },
+  { name: 'Fentes barre marchées', muscleGroup: 'Quadriceps' },
+  { name: 'Fentes haltères marchées', muscleGroup: 'Quadriceps' },
+  { name: 'Fentes statiques barre', muscleGroup: 'Quadriceps' },
+  { name: 'Split squat bulgare', muscleGroup: 'Quadriceps' },
+  { name: 'Extension quadriceps machine', muscleGroup: 'Quadriceps' },
+  { name: 'Squat sumo barre', muscleGroup: 'Quadriceps' },
+  { name: 'Squat avant barre', muscleGroup: 'Quadriceps' },
+
+  // ─── Ischio-jambiers ─────────────────────────────────────────────────────────
+  { name: 'Curl jambes couché machine', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Curl jambes assis machine', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Curl jambes debout câble', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Romanian deadlift barre', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Romanian deadlift haltères', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Soulevé de terre jambes tendues', muscleGroup: 'Ischio-jambiers' },
+  { name: 'Nordic curl', muscleGroup: 'Ischio-jambiers' },
+
+  // ─── Fessiers ────────────────────────────────────────────────────────────────
+  { name: 'Hip thrust barre', muscleGroup: 'Fessiers' },
+  { name: 'Hip thrust machine', muscleGroup: 'Fessiers' },
+  { name: 'Glute bridge haltère', muscleGroup: 'Fessiers' },
+  { name: 'Abduction hanche câble', muscleGroup: 'Fessiers' },
+  { name: 'Abduction hanche machine', muscleGroup: 'Fessiers' },
+  { name: 'Donkey kick câble', muscleGroup: 'Fessiers' },
+  { name: 'Good morning fessiers', muscleGroup: 'Fessiers' },
+
+  // ─── Mollets ─────────────────────────────────────────────────────────────────
+  { name: 'Mollets debout machine', muscleGroup: 'Mollets' },
+  { name: 'Mollets assis machine', muscleGroup: 'Mollets' },
+  { name: 'Mollets à la presse', muscleGroup: 'Mollets' },
+  { name: 'Mollets unilatéral haltère', muscleGroup: 'Mollets' },
+  { name: 'Mollets barre', muscleGroup: 'Mollets' },
+
+  // ─── Abdominaux ──────────────────────────────────────────────────────────────
+  { name: 'Crunch', muscleGroup: 'Abdominaux' },
+  { name: 'Crunch câble', muscleGroup: 'Abdominaux' },
+  { name: 'Crunch machine', muscleGroup: 'Abdominaux' },
+  { name: 'Relevé de jambes suspendu', muscleGroup: 'Abdominaux' },
+  { name: 'Relevé de jambes couché', muscleGroup: 'Abdominaux' },
+  { name: 'Russian twist', muscleGroup: 'Abdominaux' },
+  { name: 'Planche', muscleGroup: 'Abdominaux' },
+  { name: 'Planche latérale', muscleGroup: 'Abdominaux' },
+  { name: 'Ab wheel', muscleGroup: 'Abdominaux' },
+  { name: 'Mountain climbers', muscleGroup: 'Abdominaux' },
+  { name: 'Bicycle crunch', muscleGroup: 'Abdominaux' },
+  { name: 'Dragon flag', muscleGroup: 'Abdominaux' },
+
+  // ─── Cardio ──────────────────────────────────────────────────────────────────
+  { name: 'Tapis de course', muscleGroup: 'Cardio' },
+  { name: 'Vélo elliptique', muscleGroup: 'Cardio' },
+  { name: 'Rameur', muscleGroup: 'Cardio' },
+  { name: 'Vélo stationnaire', muscleGroup: 'Cardio' },
+  { name: 'Corde à sauter', muscleGroup: 'Cardio' },
+  { name: 'Burpees', muscleGroup: 'Cardio' },
+  { name: 'Box jumps', muscleGroup: 'Cardio' },
+  { name: 'Stepping', muscleGroup: 'Cardio' },
+];
+
+export const MUSCLE_GROUPS = [
+  'Tous',
+  'Pectoraux',
+  'Dos',
+  'Épaules',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Ischio-jambiers',
+  'Fessiers',
+  'Mollets',
+  'Abdominaux',
+  'Cardio',
+];
+
+export const MUSCLE_GROUP_COLORS: Record<string, string> = {
+  'Pectoraux':        '#FF6B6B',
+  'Dos':              '#7C6FF7',
+  'Épaules':          '#64B5F6',
+  'Biceps':           '#4ECDC4',
+  'Triceps':          '#FFD93D',
+  'Quadriceps':       '#A89BFF',
+  'Ischio-jambiers':  '#FF9F7F',
+  'Fessiers':         '#F06292',
+  'Mollets':          '#81C784',
+  'Abdominaux':       '#FF8A65',
+  'Cardio':           '#4FC3F7',
+};
