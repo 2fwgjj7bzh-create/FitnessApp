@@ -8,9 +8,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { saveWorkout, getPrograms, getWorkouts } from '../storage';
+import { saveWorkout, getPrograms, getWorkouts, saveProgram } from '../storage';
 import { uid, formatDateLong, formatDate } from '../utils/helpers';
-import { Exercise, ExerciseSet, Workout, WorkoutStackParamList } from '../types';
+import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutSession'>;
@@ -162,15 +162,37 @@ export default function WorkoutSessionScreen() {
       Alert.alert('Séance vide', 'Ajoute au moins un exercice avant de terminer.');
       return;
     }
+    const now = new Date().toISOString();
     await saveWorkout({
       id: uid(),
       name: workoutName,
-      date: new Date().toISOString(),
+      date: now,
       duration: 0,
       exercises,
       notes,
       programId: currentProgramId,
     });
+    // Sync exercises back to program template so calendar stays accurate
+    if (currentProgramId) {
+      const progList = await getPrograms();
+      const prog = progList.find(p => p.id === currentProgramId);
+      if (prog) {
+        const programExercises: ProgramExercise[] = exercises.map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          muscleGroup: ex.muscleGroup,
+          sets: ex.sets.map(s => ({
+            id: s.id,
+            repsRange: s.targetRepsRange ?? (s.reps > 0 ? String(s.reps) : '8-12'),
+          })),
+          targetWeight: ex.sets.find(s => s.weight > 0)?.weight,
+          restSeconds: ex.restSeconds,
+          videoUrl: ex.videoUrl,
+          notes: ex.notes,
+        }));
+        await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
+      }
+    }
     navigation.goBack();
   };
 

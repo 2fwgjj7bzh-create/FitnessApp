@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,8 +8,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { getPrograms, getWeeklyTemplate, saveWeeklyTemplate } from '../storage';
-import { WorkoutProgram, WeeklyTemplate, WorkoutStackParamList } from '../types';
+import { getPrograms, getWeeklyTemplate, saveWeeklyTemplate, getWorkouts } from '../storage';
+import { WorkoutProgram, WeeklyTemplate, WorkoutStackParamList, Workout } from '../types';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WeeklySchedule'>;
 
@@ -28,12 +28,25 @@ export default function WeeklyScheduleScreen() {
   const [programs, setPrograms] = useState<WorkoutProgram[]>([]);
   const [template, setTemplate] = useState<WeeklyTemplate>({});
   const [pickingDay, setPickingDay] = useState<string | null>(null);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
 
   const load = useCallback(async () => {
-    const [progs, tmpl] = await Promise.all([getPrograms(), getWeeklyTemplate()]);
+    const [progs, tmpl, ws] = await Promise.all([getPrograms(), getWeeklyTemplate(), getWorkouts()]);
     setPrograms(progs);
     setTemplate(tmpl);
+    setWorkouts(ws);
   }, []);
+
+  // Last workout per programId — fallback when template has 0 exercises
+  const lastWorkoutByProgramId = React.useMemo(() => {
+    const map: Record<string, Workout> = {};
+    workouts.forEach(w => {
+      if (w.programId && (!map[w.programId] || new Date(w.date) > new Date(map[w.programId].date))) {
+        map[w.programId] = w;
+      }
+    });
+    return map;
+  }, [workouts]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -143,6 +156,12 @@ export default function WeeklyScheduleScreen() {
 
               {programs.map(p => {
                 const isSelected = template[pickingDay ?? ''] === p.id;
+                const lastW = lastWorkoutByProgramId[p.id];
+                const exCount = p.exercises.length > 0 ? p.exercises.length : (lastW?.exercises.length ?? 0);
+                const setCount = p.exercises.length > 0
+                  ? p.exercises.reduce((a, e) => a + e.sets.length, 0)
+                  : (lastW?.exercises.reduce((a, e) => a + e.sets.length, 0) ?? 0);
+                const fromLastSession = p.exercises.length === 0 && lastW != null;
                 return (
                   <TouchableOpacity
                     key={p.id}
@@ -155,9 +174,10 @@ export default function WeeklyScheduleScreen() {
                     <View style={modalStyles.optionTextBlock}>
                       <Text style={modalStyles.optionName}>{p.name}</Text>
                       <Text style={modalStyles.optionSub}>
-                        {p.exercises.length} exercice{p.exercises.length > 1 ? 's' : ''}
+                        {exCount} exercice{exCount !== 1 ? 's' : ''}
                         {' · '}
-                        {p.exercises.reduce((a, e) => a + e.sets.length, 0)} séries
+                        {setCount} séries
+                        {fromLastSession ? ' · dernière séance' : ''}
                       </Text>
                     </View>
                     {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
