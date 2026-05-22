@@ -41,6 +41,7 @@ export default function WorkoutSessionScreen() {
   const [pastSessions, setPastSessions] = useState<Workout[]>([]);
   const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     const pid = route.params?.programId;
@@ -196,9 +197,10 @@ export default function WorkoutSessionScreen() {
           await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
         }
       }
+      setSaving(false);
+      setShowSummary(true);
     } catch (e) {
       console.error('[handleFinish]', e);
-    } finally {
       setSaving(false);
       navigation.goBack();
     }
@@ -279,6 +281,14 @@ export default function WorkoutSessionScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Summary Modal */}
+      <SummaryModal
+        visible={showSummary}
+        workoutName={workoutName}
+        exercises={exercises}
+        onClose={() => navigation.goBack()}
+      />
 
       {/* Logbook Modal */}
       <LogbookModal
@@ -696,6 +706,150 @@ const lbStyles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   closeBtnText: { ...typography.bodyBold, color: colors.textSecondary },
+});
+
+// ─── Summary Modal ────────────────────────────────────────────────────────────
+
+function SummaryModal({ visible, workoutName, exercises, onClose }: {
+  visible: boolean;
+  workoutName: string;
+  exercises: Exercise[];
+  onClose: () => void;
+}) {
+  const allDone = exercises.flatMap(ex => ex.sets.filter(s => s.completed));
+  const totalSets = allDone.length;
+  const totalReps = allDone.reduce((a, s) => a + s.reps, 0);
+  const totalVolume = Math.round(allDone.reduce((a, s) => a + s.reps * s.weight, 0));
+  const exDone = exercises.filter(ex => ex.sets.some(s => s.completed));
+
+  return (
+    <Modal visible={visible} animationType="slide">
+      <SafeAreaView style={smStyles.safe}>
+        <ScrollView contentContainerStyle={smStyles.content} showsVerticalScrollIndicator={false}>
+
+          {/* Hero */}
+          <View style={smStyles.hero}>
+            <View style={smStyles.trophyRing}>
+              <Ionicons name="trophy" size={44} color={colors.warning} />
+            </View>
+            <Text style={smStyles.heroTitle}>Séance terminée !</Text>
+            <Text style={smStyles.heroSub}>{workoutName}</Text>
+          </View>
+
+          {/* Stats 2×2 */}
+          <View style={smStyles.statsGrid}>
+            {[
+              { icon: 'barbell-outline',          value: String(exDone.length),             label: 'Exercices',    color: colors.primary },
+              { icon: 'checkmark-circle-outline', value: String(totalSets),                 label: 'Séries',       color: colors.success },
+              { icon: 'repeat-outline',           value: String(totalReps),                 label: 'Répétitions',  color: colors.info },
+              { icon: 'stats-chart-outline',      value: totalVolume.toLocaleString('fr'),  label: 'kg soulevés',  color: colors.warning },
+            ].map(({ icon, value, label, color }) => (
+              <View key={label} style={[smStyles.statCard, { borderColor: color + '40' }]}>
+                <Ionicons name={icon as any} size={20} color={color} />
+                <Text style={[smStyles.statValue, { color }]}>{value}</Text>
+                <Text style={smStyles.statLabel}>{label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Per-exercise breakdown */}
+          {exDone.length > 0 && (
+            <>
+              <Text style={smStyles.sectionTitle}>Détail des exercices</Text>
+              {exDone.map(ex => {
+                const done = ex.sets.filter(s => s.completed);
+                const vol = Math.round(done.reduce((a, s) => a + s.reps * s.weight, 0));
+                const reps = done.reduce((a, s) => a + s.reps, 0);
+                const tagColor = MUSCLE_GROUP_COLORS[ex.muscleGroup ?? ''] ?? colors.primary;
+                return (
+                  <View key={ex.id} style={smStyles.exCard}>
+                    <View style={smStyles.exTop}>
+                      <View style={[smStyles.exDot, { backgroundColor: tagColor }]} />
+                      <Text style={smStyles.exName} numberOfLines={1}>{ex.name}</Text>
+                      {ex.muscleGroup && (
+                        <View style={[smStyles.exTag, { backgroundColor: tagColor + '22' }]}>
+                          <Text style={[smStyles.exTagText, { color: tagColor }]}>{ex.muscleGroup}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={smStyles.exMeta}>
+                      <Text style={smStyles.exMetaText}>{done.length} série{done.length > 1 ? 's' : ''}</Text>
+                      <Text style={smStyles.exMetaDot}>·</Text>
+                      <Text style={smStyles.exMetaText}>{reps} reps</Text>
+                      {vol > 0 && <>
+                        <Text style={smStyles.exMetaDot}>·</Text>
+                        <Text style={smStyles.exMetaText}>{vol.toLocaleString('fr')} kg</Text>
+                      </>}
+                    </View>
+                  </View>
+                );
+              })}
+            </>
+          )}
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        <View style={smStyles.footer}>
+          <TouchableOpacity style={smStyles.closeBtn} onPress={onClose}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.text} />
+            <Text style={smStyles.closeBtnText}>Terminer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+const smStyles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.md, paddingTop: spacing.lg },
+  hero: { alignItems: 'center', marginBottom: spacing.xl },
+  trophyRing: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: colors.warning + '20',
+    borderWidth: 3, borderColor: colors.warning + '50',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  heroTitle: { fontSize: 28, fontWeight: '800' as const, color: colors.text, letterSpacing: -0.5 },
+  heroSub: { ...typography.body, color: colors.textSecondary, marginTop: 6 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl },
+  statCard: {
+    flex: 1, minWidth: '45%', alignItems: 'center',
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, gap: 6,
+    borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  statValue: { fontSize: 26, fontWeight: '800' as const, letterSpacing: -0.5 },
+  statLabel: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
+  sectionTitle: { ...typography.label, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.5, marginBottom: spacing.sm },
+  exCard: {
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.sm,
+    borderWidth: 1, borderColor: colors.cardBorder,
+    gap: 6,
+  },
+  exTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  exDot: { width: 8, height: 8, borderRadius: 4 },
+  exName: { ...typography.bodyBold, color: colors.text, flex: 1 },
+  exTag: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.round },
+  exTagText: { ...typography.tiny, fontWeight: '600' },
+  exMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: 16 },
+  exMetaText: { ...typography.caption, color: colors.textSecondary },
+  exMetaDot: { ...typography.caption, color: colors.textMuted },
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    padding: spacing.md, paddingBottom: spacing.lg,
+    backgroundColor: colors.background + 'EE',
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  closeBtn: {
+    backgroundColor: colors.success, borderRadius: borderRadius.round,
+    padding: spacing.md, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+  },
+  closeBtnText: { ...typography.bodyBold, color: colors.text, fontSize: 16 },
 });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
