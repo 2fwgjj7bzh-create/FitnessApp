@@ -552,18 +552,21 @@ function RMCalculator() {
         </View>
         <View style={calcStyles.inputGroup}>
           <Text style={calcStyles.inputLabel}>RÉPÉTITIONS</Text>
-          <TextInput
-            style={calcStyles.input}
-            value={reps}
-            onChangeText={v => {
-              const n = parseInt(v, 10);
-              if (v === '' || (!isNaN(n) && n >= 1 && n <= 20)) setReps(v);
-            }}
-            keyboardType="number-pad"
-            placeholder="8"
-            placeholderTextColor={colors.textMuted}
-            maxLength={2}
-          />
+          <View style={calcStyles.stepper}>
+            <TouchableOpacity
+              style={calcStyles.stepBtn}
+              onPress={() => setReps(v => String(Math.max(1, parseInt(v || '1', 10) - 1)))}
+            >
+              <Ionicons name="remove" size={22} color={colors.primary} />
+            </TouchableOpacity>
+            <Text style={calcStyles.stepValue}>{reps || '—'}</Text>
+            <TouchableOpacity
+              style={calcStyles.stepBtn}
+              onPress={() => setReps(v => String(Math.min(20, parseInt(v || '0', 10) + 1)))}
+            >
+              <Ionicons name="add" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -649,6 +652,19 @@ const calcStyles = StyleSheet.create({
   fChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   fChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   fChipTextActive: { color: colors.text },
+  stepper: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    borderWidth: 1, borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.sm,
+  },
+  stepBtn: {
+    width: 40, height: 40, borderRadius: borderRadius.round,
+    backgroundColor: colors.primary + '22', justifyContent: 'center', alignItems: 'center',
+  },
+  stepValue: {
+    fontSize: 28, fontWeight: '700' as const, color: colors.text, minWidth: 40, textAlign: 'center',
+  },
   resultCard: {
     backgroundColor: colors.card, borderRadius: borderRadius.xl,
     padding: spacing.xl, alignItems: 'center', marginBottom: spacing.lg,
