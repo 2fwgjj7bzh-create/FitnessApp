@@ -532,7 +532,7 @@ function RMCalculator() {
 
   const w = parseFloat(weight);
   const r = parseInt(reps, 10);
-  const valid = !isNaN(w) && w > 0 && !isNaN(r) && r >= 1 && r <= 12;
+  const valid = !isNaN(w) && w > 0 && !isNaN(r) && r >= 1 && r <= 20;
   const max = valid ? oneRM(w, r, formula) : null;
 
   return (
@@ -557,7 +557,7 @@ function RMCalculator() {
             value={reps}
             onChangeText={v => {
               const n = parseInt(v, 10);
-              if (v === '' || (!isNaN(n) && n >= 1 && n <= 12)) setReps(v);
+              if (v === '' || (!isNaN(n) && n >= 1 && n <= 20)) setReps(v);
             }}
             keyboardType="number-pad"
             placeholder="8"
