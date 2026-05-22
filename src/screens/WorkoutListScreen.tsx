@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, Modal, ScrollView,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, Modal, ScrollView, TextInput,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,7 +17,7 @@ type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutList'>;
 
 export default function WorkoutListScreen() {
   const navigation = useNavigation<NavProp>();
-  const [tab, setTab] = useState<'sessions' | 'programs'>('sessions');
+  const [tab, setTab] = useState<'sessions' | 'programs' | 'calc'>('sessions');
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [programs, setPrograms] = useState<WorkoutProgram[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,7 +116,7 @@ export default function WorkoutListScreen() {
 
   const addBtnPress = useCallback(() => {
     if (tab === 'sessions') setShowStartModal(true);
-    else openTemplateModal();
+    else if (tab === 'programs') openTemplateModal();
   }, [tab, openTemplateModal]);
 
   return (
@@ -128,9 +128,11 @@ export default function WorkoutListScreen() {
           <TouchableOpacity style={styles.calendarBtn} onPress={() => navigation.navigate('WeeklySchedule')}>
             <Ionicons name="calendar-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={addBtnPress}>
-            <Ionicons name="add" size={22} color={colors.text} />
-          </TouchableOpacity>
+          {tab !== 'calc' && (
+            <TouchableOpacity style={styles.addBtn} onPress={addBtnPress}>
+              <Ionicons name="add" size={22} color={colors.text} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -141,6 +143,9 @@ export default function WorkoutListScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabBtn, tab === 'programs' && styles.tabBtnActive]} onPress={() => setTab('programs')}>
           <Text style={[styles.tabBtnText, tab === 'programs' && styles.tabBtnTextActive]}>Programmes</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'calc' && styles.tabBtnActive]} onPress={() => setTab('calc')}>
+          <Text style={[styles.tabBtnText, tab === 'calc' && styles.tabBtnTextActive]}>1RM</Text>
         </TouchableOpacity>
       </View>
 
@@ -164,7 +169,7 @@ export default function WorkoutListScreen() {
           }
           ListFooterComponent={<View style={{ height: 20 }} />}
         />
-      ) : (
+      ) : tab === 'programs' ? (
         <FlatList
           data={programs}
           renderItem={renderProgram}
@@ -184,6 +189,8 @@ export default function WorkoutListScreen() {
           }
           ListFooterComponent={<View style={{ height: 20 }} />}
         />
+      ) : (
+        <RMCalculator />
       )}
 
       {/* ── Start Session Modal ── */}
@@ -501,6 +508,172 @@ const cardStyles = StyleSheet.create({
   exName: { ...typography.caption, color: colors.textSecondary, flex: 1 },
   exSets: { ...typography.caption, color: colors.textMuted },
   exMore: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic', marginTop: 2 },
+});
+
+// ─── 1RM Calculator ───────────────────────────────────────────────────────────
+
+type Formula = 'brzycki' | 'epley';
+
+function oneRM(w: number, r: number, f: Formula): number {
+  if (r === 1) return w;
+  if (f === 'epley') return w * (1 + r / 30);
+  return w * 36 / (37 - r); // Brzycki
+}
+
+function pctAt(reps: number, f: Formula): number {
+  if (f === 'epley') return 1 / (1 + reps / 30);
+  return (37 - reps) / 36; // Brzycki
+}
+
+function RMCalculator() {
+  const [weight, setWeight] = useState('');
+  const [reps, setReps] = useState('');
+  const [formula, setFormula] = useState<Formula>('brzycki');
+
+  const w = parseFloat(weight);
+  const r = parseInt(reps, 10);
+  const valid = !isNaN(w) && w > 0 && !isNaN(r) && r >= 1 && r <= 12;
+  const max = valid ? oneRM(w, r, formula) : null;
+
+  return (
+    <ScrollView contentContainerStyle={calcStyles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* Inputs */}
+      <View style={calcStyles.inputRow}>
+        <View style={calcStyles.inputGroup}>
+          <Text style={calcStyles.inputLabel}>POIDS (kg)</Text>
+          <TextInput
+            style={calcStyles.input}
+            value={weight}
+            onChangeText={setWeight}
+            keyboardType="decimal-pad"
+            placeholder="80"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+        <View style={calcStyles.inputGroup}>
+          <Text style={calcStyles.inputLabel}>RÉPÉTITIONS</Text>
+          <TextInput
+            style={calcStyles.input}
+            value={reps}
+            onChangeText={v => {
+              const n = parseInt(v, 10);
+              if (v === '' || (!isNaN(n) && n >= 1 && n <= 12)) setReps(v);
+            }}
+            keyboardType="number-pad"
+            placeholder="8"
+            placeholderTextColor={colors.textMuted}
+            maxLength={2}
+          />
+        </View>
+      </View>
+
+      {/* Formula selector */}
+      <View style={calcStyles.formulaRow}>
+        <Text style={calcStyles.formulaLabel}>Formule</Text>
+        {(['brzycki', 'epley'] as Formula[]).map(f => (
+          <TouchableOpacity
+            key={f}
+            style={[calcStyles.fChip, formula === f && calcStyles.fChipActive]}
+            onPress={() => setFormula(f)}
+          >
+            <Text style={[calcStyles.fChipText, formula === f && calcStyles.fChipTextActive]}>
+              {f === 'brzycki' ? 'Brzycki' : 'Epley'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* 1RM result card */}
+      <View style={calcStyles.resultCard}>
+        <Text style={calcStyles.resultLabel}>1RM ESTIMÉ</Text>
+        <Text style={calcStyles.resultValue}>
+          {max !== null ? `${(Math.round(max * 10) / 10).toFixed(1)} kg` : '—'}
+        </Text>
+        {valid && (
+          <Text style={calcStyles.resultSub}>
+            {w} kg × {r} rép{r > 1 ? 's' : ''} · {formula === 'brzycki' ? 'Brzycki' : 'Epley'}
+          </Text>
+        )}
+      </View>
+
+      {/* Table reps 1-12 */}
+      {max !== null && (
+        <View style={calcStyles.table}>
+          <View style={calcStyles.tableHead}>
+            <Text style={[calcStyles.thText, { flex: 1 }]}>Reps</Text>
+            <Text style={[calcStyles.thText, { flex: 1.2, textAlign: 'center' }]}>% 1RM</Text>
+            <Text style={[calcStyles.thText, { flex: 2, textAlign: 'right' }]}>Poids estimé</Text>
+          </View>
+          {Array.from({ length: 12 }, (_, i) => {
+            const rep = i + 1;
+            const pct = pctAt(rep, formula);
+            const est = Math.round(max * pct * 4) / 4; // arrondi au 0.25 kg
+            const active = rep === r;
+            return (
+              <View key={rep} style={[calcStyles.tableRow, active && calcStyles.tableRowActive]}>
+                <Text style={[calcStyles.tdText, { flex: 1 }, active && calcStyles.tdActive]}>{rep}</Text>
+                <Text style={[calcStyles.tdText, { flex: 1.2, textAlign: 'center' }, active && calcStyles.tdActive]}>
+                  {Math.round(pct * 100)}%
+                </Text>
+                <Text style={[calcStyles.tdText, { flex: 2, textAlign: 'right' }, active && calcStyles.tdActive]}>
+                  {est.toFixed(2).replace(/\.?0+$/, '')} kg
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  );
+}
+
+const calcStyles = StyleSheet.create({
+  container: { padding: spacing.md },
+  inputRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
+  inputGroup: { flex: 1, gap: spacing.xs },
+  inputLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
+  input: {
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    fontSize: 28, fontWeight: '700' as const, color: colors.text, textAlign: 'center',
+    borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  formulaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  formulaLabel: { ...typography.caption, color: colors.textMuted, marginRight: 4 },
+  fChip: {
+    paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: borderRadius.round,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+  },
+  fChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  fChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  fChipTextActive: { color: colors.text },
+  resultCard: {
+    backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    padding: spacing.xl, alignItems: 'center', marginBottom: spacing.lg,
+    borderWidth: 1, borderColor: colors.cardBorder, ...shadows.md,
+  },
+  resultLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.sm },
+  resultValue: { fontSize: 52, fontWeight: '800' as const, color: colors.primary, letterSpacing: -1 },
+  resultSub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm },
+  table: {
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  tableHead: {
+    flexDirection: 'row', backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  thText: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.5 },
+  tableRow: {
+    flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border + '55',
+  },
+  tableRowActive: { backgroundColor: colors.primary + '18' },
+  tdText: { ...typography.body, color: colors.text },
+  tdActive: { color: colors.primary, fontWeight: '700' as const },
 });
 
 const styles = StyleSheet.create({
