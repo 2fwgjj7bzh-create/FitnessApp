@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Workout, NutritionDay, WeeklyCheckin, UserGoals, WorkoutProgram, WeeklyTemplate, UserProfile } from '../types';
+import { DEFAULT_PROGRAMS } from '../data/defaultPrograms';
 
 const KEYS = {
   WORKOUTS: '@fitness/workouts',
@@ -9,6 +10,7 @@ const KEYS = {
   PROGRAMS: '@fitness/programs',
   WEEKLY_TEMPLATE: '@fitness/weekly_template',
   PROFILE: '@fitness/profile',
+  PROGRAMS_SEEDED: '@fitness/programs_seeded',
 };
 
 async function getList<T>(key: string): Promise<T[]> {
@@ -57,6 +59,20 @@ export async function saveProgram(program: WorkoutProgram): Promise<void> {
 export async function deleteProgram(id: string): Promise<void> {
   const list = await getPrograms();
   await saveList(KEYS.PROGRAMS, list.filter(p => p.id !== id));
+}
+
+export async function seedDefaultPrograms(): Promise<void> {
+  try {
+    const already = await AsyncStorage.getItem(KEYS.PROGRAMS_SEEDED);
+    if (already) return;
+    const existing = await getPrograms();
+    const existingIds = new Set(existing.map(p => p.id));
+    const toAdd = DEFAULT_PROGRAMS.filter(p => !existingIds.has(p.id));
+    if (toAdd.length > 0) await saveList(KEYS.PROGRAMS, [...existing, ...toAdd]);
+    await AsyncStorage.setItem(KEYS.PROGRAMS_SEEDED, '1');
+  } catch (err) {
+    console.error('[storage] seedDefaultPrograms failed:', err);
+  }
 }
 
 // ─── Weekly Template ──────────────────────────────────────────────────────────
