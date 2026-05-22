@@ -11,7 +11,7 @@ import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { saveWorkout, getPrograms, getWorkouts } from '../storage';
 import { uid, formatDateLong, formatDate } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList } from '../types';
-import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, ExerciseTemplate } from '../data/exerciseDatabase';
+import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutSession'>;
 type RoutePropType = RouteProp<WorkoutStackParamList, 'WorkoutSession'>;
@@ -36,6 +36,7 @@ export default function WorkoutSessionScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerGroup, setPickerGroup] = useState('Tous');
+  const [pickerEquipment, setPickerEquipment] = useState<Equipment | 'Tous'>('Tous');
   const [showLogbook, setShowLogbook] = useState(false);
   const [pastSessions, setPastSessions] = useState<Workout[]>([]);
   const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
@@ -182,8 +183,9 @@ export default function WorkoutSessionScreen() {
 
   const filtered = EXERCISE_DATABASE.filter(e => {
     const matchGroup = pickerGroup === 'Tous' || e.muscleGroup === pickerGroup;
+    const matchEquip = pickerEquipment === 'Tous' || e.equipment === pickerEquipment;
     const matchSearch = !pickerSearch || e.name.toLowerCase().includes(pickerSearch.toLowerCase());
-    return matchGroup && matchSearch;
+    return matchGroup && matchEquip && matchSearch;
   });
 
   return (
@@ -268,7 +270,7 @@ export default function WorkoutSessionScreen() {
               autoFocus
             />
 
-            {/* Group filter chips */}
+            {/* Muscle group filter */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={pickerStyles.groupScroll}>
               {MUSCLE_GROUPS.map(g => (
                 <TouchableOpacity
@@ -276,11 +278,35 @@ export default function WorkoutSessionScreen() {
                   style={[pickerStyles.groupChip, pickerGroup === g && pickerStyles.groupChipActive]}
                   onPress={() => setPickerGroup(g)}
                 >
-                  <Text style={[pickerStyles.groupChipText, pickerGroup === g && pickerStyles.groupChipTextActive]}>
-                    {g}
-                  </Text>
+                  <Text style={[pickerStyles.groupChipText, pickerGroup === g && pickerStyles.groupChipTextActive]}>{g}</Text>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+
+            {/* Equipment filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={pickerStyles.groupScroll}>
+              {(['Tous', ...EQUIPMENT_LIST] as const).map(eq => {
+                const active = pickerEquipment === eq;
+                const color = eq === 'Tous' ? colors.primary : EQUIPMENT_COLORS[eq as Equipment];
+                return (
+                  <TouchableOpacity
+                    key={eq}
+                    style={[pickerStyles.equipChip, active && { backgroundColor: color, borderColor: color }]}
+                    onPress={() => setPickerEquipment(eq as Equipment | 'Tous')}
+                  >
+                    {eq !== 'Tous' && (
+                      <Ionicons
+                        name={EQUIPMENT_ICONS[eq as Equipment] as any}
+                        size={12}
+                        color={active ? '#fff' : color}
+                      />
+                    )}
+                    <Text style={[pickerStyles.equipChipText, active && { color: '#fff' }, !active && eq !== 'Tous' && { color }]}>
+                      {eq}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             <FlatList
@@ -796,6 +822,13 @@ const pickerStyles = StyleSheet.create({
   groupChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   groupChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   groupChipTextActive: { color: colors.text },
+  equipChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: 6,
+    borderRadius: borderRadius.round, backgroundColor: colors.card,
+    marginRight: spacing.xs, borderWidth: 1, borderColor: colors.border,
+  },
+  equipChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
