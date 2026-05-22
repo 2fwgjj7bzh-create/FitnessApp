@@ -1,9 +1,8 @@
-import React, { Component, ReactNode, useEffect } from 'react';
+import React, { Component, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
-import { seedDefaultPrograms } from './src/storage';
 
 interface ErrorState { hasError: boolean; error: Error | null }
 
@@ -42,8 +41,6 @@ const errStyles = StyleSheet.create({
 });
 
 export default function App() {
-  useEffect(() => { seedDefaultPrograms(); }, []);
-
   return (
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor="#0F0F13" />

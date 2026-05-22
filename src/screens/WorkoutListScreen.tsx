@@ -1,16 +1,17 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, Modal,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, Modal, ScrollView,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { getWorkouts, deleteWorkout, getPrograms, deleteProgram } from '../storage';
+import { getWorkouts, deleteWorkout, getPrograms, deleteProgram, createProgramsFromTemplate } from '../storage';
 import { formatDate } from '../utils/helpers';
 import { Workout, WorkoutProgram, WorkoutStackParamList } from '../types';
 import { MUSCLE_GROUP_COLORS } from '../data/exerciseDatabase';
+import { PROGRAM_TEMPLATES, ProgramTemplate, ProgramVariant } from '../data/programTemplates';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutList'>;
 
@@ -21,6 +22,8 @@ export default function WorkoutListScreen() {
   const [programs, setPrograms] = useState<WorkoutProgram[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
 
   const load = useCallback(async () => {
     const [ws, ps] = await Promise.all([getWorkouts(), getPrograms()]);
@@ -36,19 +39,19 @@ export default function WorkoutListScreen() {
     setRefreshing(false);
   };
 
-  const handleDeleteWorkout = (id: string, name: string) => {
+  const handleDeleteWorkout = useCallback((id: string, name: string) => {
     Alert.alert('Supprimer', `Supprimer "${name}" ?`, [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Supprimer', style: 'destructive', onPress: async () => { await deleteWorkout(id); load(); } },
     ]);
-  };
+  }, [load]);
 
-  const handleDeleteProgram = (id: string, name: string) => {
-    Alert.alert('Supprimer', `Supprimer le programme "${name}" ?`, [
+  const handleDeleteProgram = useCallback((id: string, name: string) => {
+    Alert.alert('Supprimer', `Supprimer "${name}" ?`, [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Supprimer', style: 'destructive', onPress: async () => { await deleteProgram(id); load(); } },
     ]);
-  };
+  }, [load]);
 
   const startFreeSession = useCallback(() => {
     setShowStartModal(false);
@@ -59,6 +62,40 @@ export default function WorkoutListScreen() {
     setShowStartModal(false);
     navigation.navigate('WorkoutSession', { programId });
   }, [navigation]);
+
+  const handleSelectTemplate = useCallback((template: ProgramTemplate) => {
+    if (template.variants.length === 1) {
+      // Pas de choix de fréquence → création directe
+      Alert.alert(
+        `Créer ${template.name}`,
+        `${template.variants[0].sublabel} seront créées.\n\nTu pourras ajouter les exercices ensuite.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Créer', onPress: async () => {
+              setShowTemplateModal(false);
+              await createProgramsFromTemplate(template.variants[0].sessions);
+              load();
+            },
+          },
+        ]
+      );
+    } else {
+      setSelectedTemplate(template);
+    }
+  }, [load]);
+
+  const handleSelectVariant = useCallback(async (variant: ProgramVariant) => {
+    setShowTemplateModal(false);
+    setSelectedTemplate(null);
+    await createProgramsFromTemplate(variant.sessions);
+    load();
+  }, [load]);
+
+  const openTemplateModal = useCallback(() => {
+    setSelectedTemplate(null);
+    setShowTemplateModal(true);
+  }, []);
 
   const renderSession = useCallback(({ item: w }: { item: Workout }) => (
     <WorkoutCard
@@ -77,22 +114,21 @@ export default function WorkoutListScreen() {
     />
   ), [handleDeleteProgram, navigation, startProgramSession]);
 
+  const addBtnPress = useCallback(() => {
+    if (tab === 'sessions') setShowStartModal(true);
+    else openTemplateModal();
+  }, [tab, openTemplateModal]);
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Entraînements</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.calendarBtn}
-            onPress={() => navigation.navigate('WeeklySchedule')}
-          >
+          <TouchableOpacity style={styles.calendarBtn} onPress={() => navigation.navigate('WeeklySchedule')}>
             <Ionicons name="calendar-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => tab === 'sessions' ? setShowStartModal(true) : navigation.navigate('CreateProgram', {})}
-          >
+          <TouchableOpacity style={styles.addBtn} onPress={addBtnPress}>
             <Ionicons name="add" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
@@ -100,16 +136,10 @@ export default function WorkoutListScreen() {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'sessions' && styles.tabBtnActive]}
-          onPress={() => setTab('sessions')}
-        >
+        <TouchableOpacity style={[styles.tabBtn, tab === 'sessions' && styles.tabBtnActive]} onPress={() => setTab('sessions')}>
           <Text style={[styles.tabBtnText, tab === 'sessions' && styles.tabBtnTextActive]}>Séances</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'programs' && styles.tabBtnActive]}
-          onPress={() => setTab('programs')}
-        >
+        <TouchableOpacity style={[styles.tabBtn, tab === 'programs' && styles.tabBtnActive]} onPress={() => setTab('programs')}>
           <Text style={[styles.tabBtnText, tab === 'programs' && styles.tabBtnTextActive]}>Programmes</Text>
         </TouchableOpacity>
       </View>
@@ -146,9 +176,9 @@ export default function WorkoutListScreen() {
             <View style={styles.emptyState}>
               <Ionicons name="list-outline" size={56} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>Aucun programme</Text>
-              <Text style={styles.emptySubtitle}>Crée un programme réutilisable !</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('CreateProgram', {})}>
-                <Text style={styles.emptyBtnText}>Créer un programme</Text>
+              <Text style={styles.emptySubtitle}>Crée un programme depuis un modèle</Text>
+              <TouchableOpacity style={styles.emptyBtn} onPress={openTemplateModal}>
+                <Text style={styles.emptyBtnText}>Choisir un modèle</Text>
               </TouchableOpacity>
             </View>
           }
@@ -156,14 +186,12 @@ export default function WorkoutListScreen() {
         />
       )}
 
-      {/* Start Session Modal */}
+      {/* ── Start Session Modal ── */}
       <Modal visible={showStartModal} animationType="slide" transparent>
         <TouchableOpacity style={modalStyles.overlay} activeOpacity={1} onPress={() => setShowStartModal(false)}>
           <View style={modalStyles.sheet} onStartShouldSetResponder={() => true}>
             <View style={modalStyles.handle} />
             <Text style={modalStyles.title}>Démarrer une séance</Text>
-
-            {/* Free session option */}
             <TouchableOpacity style={modalStyles.option} onPress={startFreeSession}>
               <View style={[modalStyles.optionIcon, { backgroundColor: colors.primary + '22' }]}>
                 <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
@@ -174,7 +202,6 @@ export default function WorkoutListScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
-
             {programs.length > 0 && (
               <>
                 <Text style={modalStyles.sectionLabel}>Depuis un programme</Text>
@@ -186,9 +213,7 @@ export default function WorkoutListScreen() {
                     <View style={modalStyles.optionText}>
                       <Text style={modalStyles.optionTitle}>{p.name}</Text>
                       <Text style={modalStyles.optionSub}>
-                        {p.exercises.length} exercice{p.exercises.length > 1 ? 's' : ''}
-                        {' · '}
-                        {p.exercises.reduce((a, e) => a + e.sets.length, 0)} séries
+                        {p.exercises.length} exercice{p.exercises.length !== 1 ? 's' : ''} · {p.exercises.reduce((a, e) => a + e.sets.length, 0)} séries
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -196,8 +221,73 @@ export default function WorkoutListScreen() {
                 ))}
               </>
             )}
-
             <TouchableOpacity style={modalStyles.cancelBtn} onPress={() => setShowStartModal(false)}>
+              <Text style={modalStyles.cancelBtnText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Template Picker Modal ── */}
+      <Modal visible={showTemplateModal} animationType="slide" transparent>
+        <TouchableOpacity style={modalStyles.overlay} activeOpacity={1} onPress={() => { setShowTemplateModal(false); setSelectedTemplate(null); }}>
+          <View style={[modalStyles.sheet, { maxHeight: '85%' }]} onStartShouldSetResponder={() => true}>
+            <View style={modalStyles.handle} />
+
+            {selectedTemplate === null ? (
+              /* Step 1 — Choix du type de programme */
+              <>
+                <Text style={modalStyles.title}>Choisir un modèle</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={tplStyles.grid}>
+                    {PROGRAM_TEMPLATES.map(t => (
+                      <TouchableOpacity key={t.id} style={tplStyles.card} onPress={() => handleSelectTemplate(t)} activeOpacity={0.8}>
+                        <View style={[tplStyles.iconBox, { backgroundColor: t.color + '22' }]}>
+                          <Ionicons name={t.icon as any} size={28} color={t.color} />
+                        </View>
+                        <Text style={tplStyles.cardName}>{t.name}</Text>
+                        <Text style={tplStyles.cardDesc}>{t.description}</Text>
+                        {t.variants.length > 1 && (
+                          <View style={tplStyles.badge}>
+                            <Text style={tplStyles.badgeText}>{t.variants.length} fréquences</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={tplStyles.manualBtn}
+                    onPress={() => { setShowTemplateModal(false); navigation.navigate('CreateProgram', {}); }}
+                  >
+                    <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+                    <Text style={tplStyles.manualBtnText}>Créer manuellement</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            ) : (
+              /* Step 2 — Choix de la fréquence */
+              <>
+                <TouchableOpacity style={tplStyles.backBtn} onPress={() => setSelectedTemplate(null)}>
+                  <Ionicons name="arrow-back" size={20} color={colors.text} />
+                  <Text style={tplStyles.backBtnText}>{selectedTemplate.name}</Text>
+                </TouchableOpacity>
+                <Text style={[modalStyles.title, { marginTop: spacing.sm }]}>Choisir la fréquence</Text>
+                {selectedTemplate.variants.map(v => (
+                  <TouchableOpacity key={v.id} style={modalStyles.option} onPress={() => handleSelectVariant(v)}>
+                    <View style={[modalStyles.optionIcon, { backgroundColor: selectedTemplate.color + '22' }]}>
+                      <Ionicons name={selectedTemplate.icon as any} size={22} color={selectedTemplate.color} />
+                    </View>
+                    <View style={modalStyles.optionText}>
+                      <Text style={modalStyles.optionTitle}>{v.label}</Text>
+                      <Text style={modalStyles.optionSub}>{v.sublabel}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity style={[modalStyles.cancelBtn, { marginTop: spacing.sm }]} onPress={() => { setShowTemplateModal(false); setSelectedTemplate(null); }}>
               <Text style={modalStyles.cancelBtnText}>Annuler</Text>
             </TouchableOpacity>
           </View>
@@ -228,12 +318,10 @@ function WorkoutCard({ workout, onDelete, onViewHistory }: {
           </TouchableOpacity>
         </View>
         <Text style={cardStyles.date}>{formatDate(workout.date.split('T')[0])}</Text>
-
         <View style={cardStyles.chips}>
           <Chip icon="fitness-outline" label={`${workout.exercises.length} exo`} />
           <Chip icon="checkmark-circle-outline" label={`${doneSets}/${totalSets} séries`} />
         </View>
-
         {workout.exercises.length > 0 && (
           <View style={cardStyles.exList}>
             {workout.exercises.slice(0, 4).map(e => (
@@ -286,13 +374,9 @@ function ProgramCard({ program, onEdit, onDelete, onStart }: {
             </TouchableOpacity>
           </View>
         </View>
-
         <Text style={progStyles.subtitle}>
-          {program.exercises.length} exercice{program.exercises.length > 1 ? 's' : ''}
-          {' · '}
-          {program.exercises.reduce((a, e) => a + e.sets.length, 0)} séries
+          {program.exercises.length} exercice{program.exercises.length !== 1 ? 's' : ''} · {program.exercises.reduce((a, e) => a + e.sets.length, 0)} séries
         </Text>
-
         <View style={progStyles.exList}>
           {program.exercises.slice(0, 4).map(e => {
             const c = MUSCLE_GROUP_COLORS[e.muscleGroup ?? ''] ?? colors.primary;
@@ -300,9 +384,7 @@ function ProgramCard({ program, onEdit, onDelete, onStart }: {
               <View key={e.id} style={progStyles.exRow}>
                 <View style={[progStyles.exDot, { backgroundColor: c }]} />
                 <Text style={progStyles.exName} numberOfLines={1}>{e.name}</Text>
-                <Text style={progStyles.exDetail}>
-                  {e.sets.length} série{e.sets.length > 1 ? 's' : ''}
-                </Text>
+                <Text style={progStyles.exDetail}>{e.sets.length} série{e.sets.length !== 1 ? 's' : ''}</Text>
               </View>
             );
           })}
@@ -310,7 +392,6 @@ function ProgramCard({ program, onEdit, onDelete, onStart }: {
             <Text style={progStyles.exMore}>+{program.exercises.length - 4} autres</Text>
           )}
         </View>
-
         <TouchableOpacity style={progStyles.startBtn} onPress={onStart}>
           <Ionicons name="play" size={15} color={colors.text} />
           <Text style={progStyles.startBtnText}>Démarrer</Text>
@@ -322,28 +403,42 @@ function ProgramCard({ program, onEdit, onDelete, onStart }: {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
+const tplStyles = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  card: {
+    width: '47%', backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
+  },
+  iconBox: { width: 48, height: 48, borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.sm },
+  cardName: { ...typography.bodyBold, color: colors.text, marginBottom: 2 },
+  cardDesc: { ...typography.tiny, color: colors.textMuted, lineHeight: 16 },
+  badge: {
+    marginTop: spacing.sm, backgroundColor: colors.primary + '22',
+    borderRadius: borderRadius.round, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start',
+  },
+  badgeText: { ...typography.tiny, color: colors.primary, fontWeight: '700' },
+  manualBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, paddingVertical: spacing.md,
+  },
+  manualBtnText: { ...typography.label, color: colors.textSecondary },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },
+  backBtnText: { ...typography.bodyBold, color: colors.text },
+});
+
 const modalStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.lg,
-    paddingBottom: 32,
+    backgroundColor: colors.surface, borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl, padding: spacing.lg, paddingBottom: 32,
   },
-  handle: {
-    width: 40, height: 4, backgroundColor: colors.border,
-    borderRadius: 2, alignSelf: 'center', marginBottom: spacing.lg,
-  },
+  handle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
   sectionLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.sm },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1, borderColor: colors.cardBorder,
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder,
   },
   optionIcon: { width: 44, height: 44, borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center' },
   optionText: { flex: 1 },
@@ -351,8 +446,7 @@ const modalStyles = StyleSheet.create({
   optionSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   cancelBtn: {
     backgroundColor: colors.card, borderRadius: borderRadius.round,
-    padding: spacing.md, alignItems: 'center', marginTop: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
+    padding: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
   cancelBtnText: { ...typography.bodyBold, color: colors.textSecondary },
 });
@@ -361,8 +455,7 @@ const progStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
     marginBottom: spacing.sm, flexDirection: 'row',
-    overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder,
-    ...shadows.sm,
+    overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
   },
   colorBar: { width: 4, backgroundColor: colors.secondary },
   body: { flex: 1, padding: spacing.md },
@@ -388,8 +481,7 @@ const cardStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
     marginBottom: spacing.sm, flexDirection: 'row',
-    overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder,
-    ...shadows.sm,
+    overflow: 'hidden', borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
   },
   colorBar: { width: 4, backgroundColor: colors.primary },
   body: { flex: 1, padding: spacing.md },
@@ -442,8 +534,7 @@ const styles = StyleSheet.create({
   emptySubtitle: { ...typography.body, color: colors.textMuted },
   emptyBtn: {
     marginTop: spacing.sm, backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
-    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.round,
   },
   emptyBtnText: { ...typography.bodyBold, color: colors.text },
 });
