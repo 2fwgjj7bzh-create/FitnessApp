@@ -26,6 +26,7 @@ export interface Workout {
   duration: number; // seconds
   exercises: Exercise[];
   notes?: string;
+  programId?: string;
 }
 
 // ─── Workout Programs (templates) ─────────────────────────────────────────────

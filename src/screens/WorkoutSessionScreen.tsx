@@ -8,9 +8,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { saveWorkout, getPrograms } from '../storage';
-import { uid } from '../utils/helpers';
-import { Exercise, ExerciseSet, WorkoutStackParamList } from '../types';
+import { saveWorkout, getPrograms, getWorkouts } from '../storage';
+import { uid, formatDateLong, formatDate } from '../utils/helpers';
+import { Exercise, ExerciseSet, Workout, WorkoutStackParamList } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutSession'>;
@@ -36,11 +36,15 @@ export default function WorkoutSessionScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerGroup, setPickerGroup] = useState('Tous');
+  const [showLogbook, setShowLogbook] = useState(false);
+  const [pastSessions, setPastSessions] = useState<Workout[]>([]);
+  const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
 
   useEffect(() => {
     const pid = route.params?.programId;
     if (pid) {
-      getPrograms().then(list => {
+      setCurrentProgramId(pid);
+      Promise.all([getPrograms(), getWorkouts()]).then(([list, allWorkouts]) => {
         const prog = list.find(p => p.id === pid);
         if (prog) {
           setWorkoutName(prog.name);
@@ -51,7 +55,6 @@ export default function WorkoutSessionScreen() {
               muscleGroup: pe.muscleGroup,
               videoUrl: pe.videoUrl,
               restSeconds: pe.restSeconds,
-              // each ProgramSet → one ExerciseSet with its individual repsRange as target
               sets: pe.sets.map(ps => ({
                 id: uid(),
                 reps: 0,
@@ -62,9 +65,26 @@ export default function WorkoutSessionScreen() {
             }))
           );
         }
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 84); // 12 semaines
+        const relevant = allWorkouts
+          .filter(w => w.programId === pid && new Date(w.date) >= cutoff)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setPastSessions(relevant);
       });
     }
   }, []);
+
+  // Dernière perf par exercice (nom → sets de la dernière séance)
+  const lastPerfMap = React.useMemo(() => {
+    const map: Record<string, ExerciseSet[]> = {};
+    pastSessions.forEach(session => {
+      session.exercises.forEach(ex => {
+        if (!map[ex.name]) map[ex.name] = ex.sets;
+      });
+    });
+    return map;
+  }, [pastSessions]);
 
   const addExercise = (tpl: ExerciseTemplate) => {
     const ex: Exercise = {
@@ -148,6 +168,7 @@ export default function WorkoutSessionScreen() {
       duration: 0,
       exercises,
       notes,
+      programId: currentProgramId,
     });
     navigation.goBack();
   };
@@ -179,6 +200,11 @@ export default function WorkoutSessionScreen() {
             onChangeText={setWorkoutName}
             placeholderTextColor={colors.textMuted}
           />
+          {currentProgramId && (
+            <TouchableOpacity style={styles.logbookBtn} onPress={() => setShowLogbook(true)}>
+              <Ionicons name="book-outline" size={18} color={colors.info} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
             <Text style={styles.finishBtnText}>Terminer</Text>
           </TouchableOpacity>
@@ -190,6 +216,7 @@ export default function WorkoutSessionScreen() {
               key={ex.id}
               exercise={ex}
               index={idx}
+              lastPerf={lastPerfMap[ex.name]}
               onRemove={removeExercise}
               onUpdate={updateExercise}
               onAddSet={addSet}
@@ -216,6 +243,14 @@ export default function WorkoutSessionScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Logbook Modal */}
+      <LogbookModal
+        visible={showLogbook}
+        onClose={() => setShowLogbook(false)}
+        sessions={pastSessions}
+        programName={workoutName}
+      />
 
       {/* Exercise Picker Modal */}
       <Modal visible={showPicker} animationType="slide" transparent>
@@ -294,6 +329,7 @@ export default function WorkoutSessionScreen() {
 interface ExerciseBlockProps {
   exercise: Exercise;
   index: number;
+  lastPerf?: ExerciseSet[];
   onRemove: (exId: string) => void;
   onUpdate: (exId: string, patch: Partial<Exercise>) => void;
   onAddSet: (exId: string) => void;
@@ -302,7 +338,7 @@ interface ExerciseBlockProps {
   onViewHistory: (name: string) => void;
 }
 
-const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, index, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onViewHistory }: ExerciseBlockProps) {
+const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onViewHistory }: ExerciseBlockProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showRestPicker, setShowRestPicker] = useState(false);
   const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
@@ -324,6 +360,14 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, index, onRem
           {exercise.muscleGroup && (
             <View style={[exStyles.muscleTag, { backgroundColor: tagColor + '22' }]}>
               <Text style={[exStyles.muscleTagText, { color: tagColor }]}>{exercise.muscleGroup}</Text>
+            </View>
+          )}
+          {lastPerf && lastPerf.length > 0 && (
+            <View style={exStyles.lastPerfRow}>
+              <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+              <Text style={exStyles.lastPerfText} numberOfLines={1}>
+                {lastPerf.map(s => `${s.reps}r × ${s.weight}kg`).join(' · ')}
+              </Text>
             </View>
           )}
         </View>
@@ -487,6 +531,113 @@ function SetRow({ set, index, targetRepsRange, onToggle, onChangeReps, onChangeW
   );
 }
 
+// ─── Logbook Modal ────────────────────────────────────────────────────────────
+
+function LogbookModal({ visible, onClose, sessions, programName }: {
+  visible: boolean;
+  onClose: () => void;
+  sessions: Workout[];
+  programName: string;
+}) {
+  if (!visible) return null;
+
+  const weekLabel = (date: string) => {
+    const days = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
+    const w = Math.floor(days / 7) + 1;
+    return `Semaine ${w}`;
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={lbStyles.overlay}>
+        <View style={lbStyles.sheet}>
+          <View style={lbStyles.header}>
+            <View style={lbStyles.handle} />
+            <View style={lbStyles.titleRow}>
+              <Ionicons name="book-outline" size={18} color={colors.info} />
+              <Text style={lbStyles.title}>{programName}</Text>
+              <Text style={lbStyles.subtitle}>12 semaines</Text>
+            </View>
+          </View>
+
+          {sessions.length === 0 ? (
+            <View style={lbStyles.empty}>
+              <Ionicons name="time-outline" size={40} color={colors.textMuted} />
+              <Text style={lbStyles.emptyText}>Aucune séance enregistrée{'\n'}pour ce programme</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={sessions}
+              keyExtractor={s => s.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              renderItem={({ item: session }) => (
+                <View style={lbStyles.sessionBlock}>
+                  <View style={lbStyles.sessionHeader}>
+                    <View style={lbStyles.weekBadge}>
+                      <Text style={lbStyles.weekText}>{weekLabel(session.date)}</Text>
+                    </View>
+                    <Text style={lbStyles.sessionDate}>{formatDateLong(session.date.split('T')[0])}</Text>
+                  </View>
+                  {session.exercises.map(ex => (
+                    <View key={ex.id} style={lbStyles.exRow}>
+                      <Text style={lbStyles.exName}>{ex.name}</Text>
+                      <Text style={lbStyles.exSets}>
+                        {ex.sets.map(s => `${s.reps}r×${s.weight}kg`).join(' · ')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            />
+          )}
+
+          <TouchableOpacity style={lbStyles.closeBtn} onPress={onClose}>
+            <Text style={lbStyles.closeBtnText}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const lbStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.surface, borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl, padding: spacing.lg,
+    paddingBottom: 32, maxHeight: '88%',
+  },
+  header: { marginBottom: spacing.md },
+  handle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  title: { ...typography.h3, color: colors.text, flex: 1 },
+  subtitle: { ...typography.caption, color: colors.textMuted },
+  empty: { alignItems: 'center', paddingVertical: 48, gap: spacing.md },
+  emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },
+  sessionBlock: {
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.sm,
+    borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  sessionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  weekBadge: {
+    backgroundColor: colors.info + '22', borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm, paddingVertical: 3,
+  },
+  weekText: { ...typography.tiny, color: colors.info, fontWeight: '700' },
+  sessionDate: { ...typography.caption, color: colors.textSecondary },
+  exRow: { paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border + '55' },
+  exName: { ...typography.label, color: colors.text, marginBottom: 2 },
+  exSets: { ...typography.tiny, color: colors.textMuted, lineHeight: 16 },
+  closeBtn: {
+    backgroundColor: colors.card, borderRadius: borderRadius.round,
+    padding: spacing.md, alignItems: 'center', marginTop: spacing.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  closeBtnText: { ...typography.bodyBold, color: colors.textSecondary },
+});
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const setStyles = StyleSheet.create({
@@ -602,6 +753,8 @@ const exStyles = StyleSheet.create({
   },
   footerBtnText: { ...typography.caption, color: colors.primary, fontWeight: '600' },
   progressText: { ...typography.caption, color: colors.textMuted },
+  lastPerfRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  lastPerfText: { ...typography.tiny, color: colors.textMuted, flex: 1 },
 });
 
 const pickerStyles = StyleSheet.create({
@@ -685,6 +838,10 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text,
     textAlign: 'center',
+  },
+  logbookBtn: {
+    width: 36, height: 36, borderRadius: borderRadius.round,
+    backgroundColor: colors.info + '22', justifyContent: 'center', alignItems: 'center',
   },
   finishBtn: {
     backgroundColor: colors.success,
