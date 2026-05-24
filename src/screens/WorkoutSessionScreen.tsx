@@ -1,17 +1,20 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
-  KeyboardAvoidingView, Platform, Modal, FlatList, Linking,
+  KeyboardAvoidingView, Platform, Modal, FlatList, Linking, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { saveWorkout, getPrograms, getWorkouts, saveProgram } from '../storage';
+import { saveWorkout, getPrograms, getWorkouts, saveProgram, getDraftSession, saveDraftSession, clearDraftSession, getUserExercises, saveUserExercise } from '../storage';
 import { uid, formatDateLong } from '../utils/helpers';
-import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise } from '../types';
+import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, DraftSession, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
+
+type PickerItem = ExerciseTemplate & { photoUri?: string };
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'WorkoutSession'>;
 type RoutePropType = RouteProp<WorkoutStackParamList, 'WorkoutSession'>;
@@ -42,40 +45,73 @@ export default function WorkoutSessionScreen() {
   const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createInitialName, setCreateInitialName] = useState('');
+
+  const loadProgram = useCallback(async (pid: string) => {
+    const [list, allWorkouts] = await Promise.all([getPrograms(), getWorkouts()]);
+    const prog = list.find(p => p.id === pid);
+    if (prog) {
+      setWorkoutName(prog.name);
+      setCurrentProgramId(pid);
+      setExercises(
+        prog.exercises.map(pe => ({
+          id: uid(),
+          name: pe.name,
+          muscleGroup: pe.muscleGroup,
+          videoUrl: pe.videoUrl,
+          restSeconds: pe.restSeconds,
+          sets: pe.sets.map(ps => ({
+            id: uid(),
+            reps: 0,
+            weight: ps.targetWeight ?? pe.targetWeight ?? 0,
+            completed: false,
+            targetRepsRange: ps.repsRange || undefined,
+          })),
+        }))
+      );
+    }
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 84);
+    const relevant = allWorkouts
+      .filter(w => w.programId === pid && new Date(w.date) >= cutoff)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setPastSessions(relevant);
+  }, []);
 
   useEffect(() => {
     const pid = route.params?.programId;
-    if (pid) {
-      setCurrentProgramId(pid);
-      Promise.all([getPrograms(), getWorkouts()]).then(([list, allWorkouts]) => {
-        const prog = list.find(p => p.id === pid);
-        if (prog) {
-          setWorkoutName(prog.name);
-          setExercises(
-            prog.exercises.map(pe => ({
-              id: uid(),
-              name: pe.name,
-              muscleGroup: pe.muscleGroup,
-              videoUrl: pe.videoUrl,
-              restSeconds: pe.restSeconds,
-              sets: pe.sets.map(ps => ({
-                id: uid(),
-                reps: 0,
-                weight: pe.targetWeight ?? 0,
-                completed: false,
-                targetRepsRange: ps.repsRange || undefined,
-              })),
-            }))
-          );
-        }
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 84); // 12 semaines
-        const relevant = allWorkouts
-          .filter(w => w.programId === pid && new Date(w.date) >= cutoff)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setPastSessions(relevant);
-      });
-    }
+    Promise.all([getDraftSession(), getUserExercises()]).then(([draft, userEx]) => {
+      setUserExercises(userEx);
+      if (draft) {
+        Alert.alert(
+          'Séance en cours',
+          `Tu avais une séance "${draft.workoutName}" non terminée. Reprendre ?`,
+          [
+            {
+              text: 'Reprendre',
+              onPress: () => {
+                setWorkoutName(draft.workoutName);
+                setExercises(draft.exercises);
+                setNotes(draft.notes);
+                if (draft.programId) setCurrentProgramId(draft.programId);
+              },
+            },
+            {
+              text: 'Nouvelle séance',
+              style: 'destructive',
+              onPress: () => {
+                clearDraftSession();
+                if (pid) loadProgram(pid);
+              },
+            },
+          ]
+        );
+      } else if (pid) {
+        loadProgram(pid);
+      }
+    });
   }, []);
 
   // Dernière perf par exercice (nom → sets de la dernière séance)
@@ -89,12 +125,17 @@ export default function WorkoutSessionScreen() {
     return map;
   }, [pastSessions]);
 
-  const addExercise = (tpl: ExerciseTemplate) => {
+  const updatePhoto = useCallback((exId: string, photoUri: string | undefined) => {
+    setExercises(prev => prev.map(e => e.id === exId ? { ...e, photoUri } : e));
+  }, []);
+
+  const addExercise = (tpl: PickerItem) => {
     const ex: Exercise = {
       id: uid(),
       name: tpl.name,
       muscleGroup: tpl.muscleGroup,
       sets: [{ id: uid(), reps: 0, weight: 0, completed: false }],
+      photoUri: tpl.photoUri,
     };
     setExercises(prev => [...prev, ex]);
     setShowPicker(false);
@@ -102,15 +143,20 @@ export default function WorkoutSessionScreen() {
     setPickerGroup('Tous');
   };
 
-  const addCustomExercise = (name: string) => {
+  const handleCreateExercise = async (name: string, muscleGroup: string | undefined, photoUri: string | undefined) => {
+    const newUserEx: UserExercise = { id: uid(), name, muscleGroup, photoUri, createdAt: new Date().toISOString() };
+    await saveUserExercise(newUserEx);
+    setUserExercises(prev => [newUserEx, ...prev]);
     const ex: Exercise = {
-      id: uid(),
-      name,
+      id: uid(), name, muscleGroup,
       sets: [{ id: uid(), reps: 0, weight: 0, completed: false }],
+      photoUri,
     };
     setExercises(prev => [...prev, ex]);
+    setShowCreateModal(false);
     setShowPicker(false);
     setPickerSearch('');
+    setPickerGroup('Tous');
   };
 
   const removeExercise = useCallback((exId: string) => {
@@ -177,26 +223,33 @@ export default function WorkoutSessionScreen() {
         notes,
         programId: currentProgramId,
       });
+      // Sync exercises back to template — failure must NOT block the summary
       if (currentProgramId) {
-        const progList = await getPrograms();
-        const prog = progList.find(p => p.id === currentProgramId);
-        if (prog) {
-          const programExercises: ProgramExercise[] = exercises.map(ex => ({
-            id: ex.id,
-            name: ex.name,
-            muscleGroup: ex.muscleGroup,
-            sets: ex.sets.map(s => ({
-              id: s.id,
-              repsRange: s.targetRepsRange ?? (s.reps > 0 ? String(s.reps) : '8-12'),
-            })),
-            targetWeight: ex.sets.find(s => s.weight > 0)?.weight,
-            restSeconds: ex.restSeconds,
-            videoUrl: ex.videoUrl,
-            notes: ex.notes,
-          }));
-          await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
+        try {
+          const progList = await getPrograms();
+          const prog = progList.find(p => p.id === currentProgramId);
+          if (prog) {
+            const programExercises: ProgramExercise[] = exercises.map(ex => ({
+              id: ex.id,
+              name: ex.name,
+              muscleGroup: ex.muscleGroup,
+              sets: ex.sets.map(s => ({
+                id: s.id,
+                repsRange: s.targetRepsRange ?? (s.reps > 0 ? String(s.reps) : '8-12'),
+                targetWeight: s.weight > 0 ? s.weight : undefined,
+              })),
+              targetWeight: ex.sets.find(s => s.weight > 0)?.weight,
+              restSeconds: ex.restSeconds,
+              videoUrl: ex.videoUrl,
+              notes: ex.notes,
+            }));
+            await saveProgram({ ...prog, exercises: programExercises, updatedAt: now });
+          }
+        } catch (syncErr) {
+          console.error('[sync]', syncErr);
         }
       }
+      await clearDraftSession();
       setSaving(false);
       setShowSummary(true);
     } catch (e) {
@@ -207,18 +260,43 @@ export default function WorkoutSessionScreen() {
   };
 
   const handleCancel = () => {
-    Alert.alert('Abandonner', 'Abandonner la séance sans sauvegarder ?', [
-      { text: 'Continuer', style: 'cancel' },
-      { text: 'Abandonner', style: 'destructive', onPress: () => navigation.goBack() },
-    ]);
+    Alert.alert(
+      'Quitter la séance',
+      exercises.length > 0 ? 'Que veux-tu faire avec ta séance en cours ?' : 'Quitter sans sauvegarder ?',
+      [
+        { text: 'Continuer', style: 'cancel' },
+        ...(exercises.length > 0 ? [{
+          text: 'Sauvegarder pour plus tard',
+          onPress: async () => {
+            await saveDraftSession({ workoutName, exercises, notes, programId: currentProgramId, savedAt: new Date().toISOString() });
+            navigation.goBack();
+          },
+        }] : []),
+        {
+          text: 'Abandonner',
+          style: 'destructive' as const,
+          onPress: async () => { await clearDraftSession(); navigation.goBack(); },
+        },
+      ]
+    );
   };
 
-  const filtered = EXERCISE_DATABASE.filter(e => {
+  const filteredUser: PickerItem[] = userExercises
+    .filter(e => {
+      const matchGroup = pickerGroup === 'Tous' || e.muscleGroup === pickerGroup;
+      const matchSearch = !pickerSearch || e.name.toLowerCase().includes(pickerSearch.toLowerCase());
+      return matchGroup && matchSearch;
+    })
+    .map(e => ({ name: e.name, muscleGroup: e.muscleGroup ?? 'Autre', equipment: 'Poids libre' as Equipment, photoUri: e.photoUri }));
+
+  const filteredDB: PickerItem[] = EXERCISE_DATABASE.filter(e => {
     const matchGroup = pickerGroup === 'Tous' || e.muscleGroup === pickerGroup;
     const matchEquip = pickerEquipment === 'Tous' || e.equipment === pickerEquipment;
     const matchSearch = !pickerSearch || e.name.toLowerCase().includes(pickerSearch.toLowerCase());
     return matchGroup && matchEquip && matchSearch;
   });
+
+  const filtered: PickerItem[] = [...filteredUser, ...filteredDB];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -260,6 +338,7 @@ export default function WorkoutSessionScreen() {
               onAddSet={addSet}
               onRemoveSet={removeSet}
               onUpdateSet={updateSet}
+              onUpdatePhoto={updatePhoto}
               onViewHistory={navigateToHistory}
             />
           ))}
@@ -358,9 +437,14 @@ export default function WorkoutSessionScreen() {
               keyExtractor={(item, index) => `${item.name}-${index}`}
               style={{ flex: 1 }}
               ListHeaderComponent={
-                pickerSearch.length > 0 && !EXERCISE_DATABASE.some(e => e.name.toLowerCase() === pickerSearch.toLowerCase())
+                pickerSearch.length > 0 &&
+                !EXERCISE_DATABASE.some(e => e.name.toLowerCase() === pickerSearch.toLowerCase()) &&
+                !userExercises.some(e => e.name.toLowerCase() === pickerSearch.toLowerCase())
                   ? (
-                    <TouchableOpacity style={pickerStyles.item} onPress={() => addCustomExercise(pickerSearch)}>
+                    <TouchableOpacity
+                      style={pickerStyles.item}
+                      onPress={() => { setCreateInitialName(pickerSearch); setShowCreateModal(true); }}
+                    >
                       <View style={pickerStyles.itemLeft}>
                         <Ionicons name="add-circle" size={18} color={colors.primary} />
                         <Text style={[pickerStyles.itemName, { color: colors.primary }]}>Créer "{pickerSearch}"</Text>
@@ -372,6 +456,10 @@ export default function WorkoutSessionScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity style={pickerStyles.item} onPress={() => addExercise(item)}>
                   <View style={pickerStyles.itemLeft}>
+                    {item.photoUri
+                      ? <Image source={{ uri: item.photoUri }} style={pickerStyles.itemPhoto} />
+                      : null
+                    }
                     <Text style={pickerStyles.itemName}>{item.name}</Text>
                   </View>
                   <View style={[pickerStyles.groupTag, { backgroundColor: (MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary) + '33' }]}>
@@ -390,6 +478,14 @@ export default function WorkoutSessionScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Create exercise modal */}
+      <CreateExerciseModal
+        visible={showCreateModal}
+        initialName={createInitialName}
+        onConfirm={handleCreateExercise}
+        onCancel={() => setShowCreateModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -405,10 +501,11 @@ interface ExerciseBlockProps {
   onAddSet: (exId: string) => void;
   onRemoveSet: (exId: string, setId: string) => void;
   onUpdateSet: (exId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: string | boolean) => void;
+  onUpdatePhoto: (exId: string, photoUri: string | undefined) => void;
   onViewHistory: (name: string) => void;
 }
 
-const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onViewHistory }: ExerciseBlockProps) {
+const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onUpdatePhoto, onViewHistory }: ExerciseBlockProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showRestPicker, setShowRestPicker] = useState(false);
   const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
@@ -417,6 +514,24 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
   const openVideo = () => {
     const url = exercise.videoUrl?.trim();
     if (url) Linking.openURL(url).catch(() => Alert.alert('Erreur', 'Impossible d\'ouvrir ce lien.'));
+  };
+
+  const handlePhotoPress = () => {
+    const opts: any[] = [
+      { text: 'Appareil photo', onPress: async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') { Alert.alert('Permission refusée', 'Active l\'accès à l\'appareil photo dans les réglages.'); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+        if (!r.canceled) onUpdatePhoto(exercise.id, r.assets[0].uri);
+      }},
+      { text: 'Galerie', onPress: async () => {
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.7 });
+        if (!r.canceled) onUpdatePhoto(exercise.id, r.assets[0].uri);
+      }},
+    ];
+    if (exercise.photoUri) opts.push({ text: 'Supprimer la photo', style: 'destructive', onPress: () => onUpdatePhoto(exercise.id, undefined) });
+    opts.push({ text: 'Annuler', style: 'cancel' });
+    Alert.alert('Photo de l\'exercice', '', opts);
   };
 
   const completedCount = exercise.sets.filter(s => s.completed).length;
@@ -442,6 +557,12 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
           )}
         </View>
         <View style={exStyles.headerRight}>
+          <TouchableOpacity onPress={handlePhotoPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            {exercise.photoUri
+              ? <Image source={{ uri: exercise.photoUri }} style={exStyles.photoThumb} />
+              : <Ionicons name="camera-outline" size={18} color={colors.textMuted} />
+            }
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
               if (hasVideo) openVideo();
@@ -852,6 +973,145 @@ const smStyles = StyleSheet.create({
   closeBtnText: { ...typography.bodyBold, color: colors.text, fontSize: 16 },
 });
 
+// ─── Create Exercise Modal ────────────────────────────────────────────────────
+
+function CreateExerciseModal({ visible, initialName, onConfirm, onCancel }: {
+  visible: boolean;
+  initialName: string;
+  onConfirm: (name: string, muscleGroup: string | undefined, photoUri: string | undefined) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const [group, setGroup] = useState<string | undefined>();
+  const [photoUri, setPhotoUri] = useState<string | undefined>();
+
+  React.useEffect(() => { if (visible) { setName(initialName); setGroup(undefined); setPhotoUri(undefined); } }, [visible, initialName]);
+
+  const pickPhoto = () => {
+    Alert.alert('Photo', 'Choisir une source', [
+      { text: 'Appareil photo', onPress: async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') { Alert.alert('Permission refusée'); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+        if (!r.canceled) setPhotoUri(r.assets[0].uri);
+      }},
+      { text: 'Galerie', onPress: async () => {
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.7 });
+        if (!r.canceled) setPhotoUri(r.assets[0].uri);
+      }},
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
+  const muscleGroups = MUSCLE_GROUPS.filter(g => g !== 'Tous');
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={ceStyles.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <View style={ceStyles.sheet}>
+            <View style={ceStyles.handle} />
+            <Text style={ceStyles.title}>Nouvel exercice</Text>
+
+            <TextInput
+              style={ceStyles.nameInput}
+              value={name}
+              onChangeText={setName}
+              placeholder="Nom de l'exercice"
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+
+            <Text style={ceStyles.label}>Groupe musculaire</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+              {muscleGroups.map(g => (
+                <TouchableOpacity
+                  key={g}
+                  style={[ceStyles.chip, group === g && ceStyles.chipActive]}
+                  onPress={() => setGroup(g === group ? undefined : g)}
+                >
+                  <Text style={[ceStyles.chipText, group === g && ceStyles.chipTextActive]}>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={ceStyles.label}>Photo de la machine / exercice</Text>
+            <TouchableOpacity style={ceStyles.photoPicker} onPress={pickPhoto}>
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={ceStyles.photoPreview} />
+              ) : (
+                <View style={ceStyles.photoEmpty}>
+                  <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
+                  <Text style={ceStyles.photoEmptyText}>Ajouter une photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[ceStyles.confirmBtn, !name.trim() && { opacity: 0.4 }]}
+              onPress={() => name.trim() && onConfirm(name.trim(), group, photoUri)}
+              disabled={!name.trim()}
+            >
+              <Ionicons name="add-circle" size={18} color={colors.text} />
+              <Text style={ceStyles.confirmBtnText}>Créer et ajouter à la séance</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={ceStyles.cancelBtn} onPress={onCancel}>
+              <Text style={ceStyles.cancelBtnText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const ceStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg, paddingBottom: 36,
+  },
+  handle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md },
+  title: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
+  nameInput: {
+    backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: 12,
+    ...typography.body, color: colors.text, marginBottom: spacing.md,
+  },
+  label: { ...typography.label, color: colors.textMuted, fontWeight: '600', marginBottom: spacing.sm },
+  chip: {
+    paddingHorizontal: spacing.md, paddingVertical: 6,
+    borderRadius: borderRadius.round, backgroundColor: colors.card,
+    marginRight: spacing.xs, borderWidth: 1, borderColor: colors.border,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  chipTextActive: { color: colors.text },
+  photoPicker: {
+    borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed',
+    borderRadius: borderRadius.lg, marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  photoPreview: { width: '100%', height: 140 },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.sm },
+  photoEmptyText: { ...typography.caption, color: colors.textMuted },
+  confirmBtn: {
+    backgroundColor: colors.primary, borderRadius: borderRadius.round,
+    padding: spacing.md, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  confirmBtnText: { ...typography.bodyBold, color: colors.text },
+  cancelBtn: {
+    backgroundColor: colors.card, borderRadius: borderRadius.round,
+    padding: spacing.md, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border,
+  },
+  cancelBtnText: { ...typography.bodyBold, color: colors.textSecondary },
+});
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const setStyles = StyleSheet.create({
@@ -969,6 +1229,7 @@ const exStyles = StyleSheet.create({
   progressText: { ...typography.caption, color: colors.textMuted },
   lastPerfRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   lastPerfText: { ...typography.tiny, color: colors.textMuted, flex: 1 },
+  photoThumb: { width: 28, height: 28, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.border },
 });
 
 const pickerStyles = StyleSheet.create({
@@ -1026,6 +1287,7 @@ const pickerStyles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   itemLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  itemPhoto: { width: 32, height: 32, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.border },
   itemName: { ...typography.body, color: colors.text },
   groupTag: {
     paddingHorizontal: spacing.sm,

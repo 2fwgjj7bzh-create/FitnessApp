@@ -17,6 +17,23 @@ export interface Exercise {
   restSeconds?: number;
   videoUrl?: string;
   notes?: string;
+  photoUri?: string;
+}
+
+export interface DraftSession {
+  workoutName: string;
+  exercises: Exercise[];
+  notes: string;
+  programId?: string;
+  savedAt: string;
+}
+
+export interface UserExercise {
+  id: string;
+  name: string;
+  muscleGroup?: string;
+  photoUri?: string;
+  createdAt: string;
 }
 
 export interface Workout {
@@ -33,7 +50,8 @@ export interface Workout {
 
 export interface ProgramSet {
   id: string;
-  repsRange: string; // e.g. "8-12" or "12-15" — per individual set
+  repsRange: string;      // e.g. "8-12" or "12-15"
+  targetWeight?: number;  // poids cible pour cette série
 }
 
 export interface ProgramExercise {

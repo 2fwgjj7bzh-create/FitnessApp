@@ -78,7 +78,7 @@ export default function CreateProgramScreen() {
     setExercises(prev => prev.map(e => {
       if (e.id !== exId) return e;
       const last = e.sets[e.sets.length - 1];
-      return { ...e, sets: [...e.sets, { id: uid(), repsRange: last?.repsRange ?? '8-12' }] };
+      return { ...e, sets: [...e.sets, { id: uid(), repsRange: last?.repsRange ?? '8-12', targetWeight: last?.targetWeight }] };
     }));
   };
 
@@ -93,6 +93,13 @@ export default function CreateProgramScreen() {
     setExercises(prev => prev.map(e => {
       if (e.id !== exId) return e;
       return { ...e, sets: e.sets.map(s => s.id === setId ? { ...s, repsRange } : s) };
+    }));
+  };
+
+  const updateSetWeight = (exId: string, setId: string, weight: number | undefined) => {
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e;
+      return { ...e, sets: e.sets.map(s => s.id === setId ? { ...s, targetWeight: weight } : s) };
     }));
   };
 
@@ -149,6 +156,7 @@ export default function CreateProgramScreen() {
               onAddSet={() => addSet(ex.id)}
               onRemoveSet={sid => removeSet(ex.id, sid)}
               onUpdateSet={(sid, reps) => updateSet(ex.id, sid, reps)}
+              onUpdateSetWeight={(sid, w) => updateSetWeight(ex.id, sid, w)}
             />
           ))}
 
@@ -256,9 +264,10 @@ interface ExerciseRowProps {
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
   onUpdateSet: (setId: string, repsRange: string) => void;
+  onUpdateSetWeight: (setId: string, weight: number | undefined) => void;
 }
 
-function ExerciseRow({ exercise, index, expanded, onToggle, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet }: ExerciseRowProps) {
+function ExerciseRow({ exercise, index, expanded, onToggle, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onUpdateSetWeight }: ExerciseRowProps) {
   const [showRestPicker, setShowRestPicker] = useState(false);
   const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
   const hasVideo = !!exercise.videoUrl?.trim();
@@ -322,6 +331,14 @@ function ExerciseRow({ exercise, index, expanded, onToggle, onRemove, onUpdate, 
                 keyboardType="default"
               />
               <Text style={rowStyles.repsLabel}>reps</Text>
+              <TextInput
+                style={[rowStyles.repsInput, { flex: 0.8 }]}
+                value={s.targetWeight && s.targetWeight > 0 ? String(s.targetWeight) : ''}
+                onChangeText={v => { const n = parseFloat(v); onUpdateSetWeight(s.id, isNaN(n) ? undefined : n); }}
+                placeholder="kg"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+              />
               {exercise.sets.length > 1 && (
                 <TouchableOpacity onPress={() => onRemoveSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="remove-circle" size={20} color={colors.error} />

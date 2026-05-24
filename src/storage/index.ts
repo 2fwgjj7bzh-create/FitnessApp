@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Workout, NutritionDay, WeeklyCheckin, UserGoals, WorkoutProgram, WeeklyTemplate, UserProfile } from '../types';
+import { Workout, NutritionDay, WeeklyCheckin, UserGoals, WorkoutProgram, WeeklyTemplate, UserProfile, DraftSession, UserExercise } from '../types';
 
 const KEYS = {
   WORKOUTS: '@fitness/workouts',
@@ -9,6 +9,8 @@ const KEYS = {
   PROGRAMS: '@fitness/programs',
   WEEKLY_TEMPLATE: '@fitness/weekly_template',
   PROFILE: '@fitness/profile',
+  DRAFT_SESSION: '@fitness/draft_session',
+  USER_EXERCISES: '@fitness/user_exercises',
 };
 
 async function getList<T>(key: string): Promise<T[]> {
@@ -141,6 +143,40 @@ export async function saveCheckin(checkin: WeeklyCheckin): Promise<void> {
 export async function deleteCheckin(id: string): Promise<void> {
   const list = await getCheckins();
   await saveList(KEYS.CHECKINS, list.filter(c => c.id !== id));
+}
+
+// ─── Draft Session ────────────────────────────────────────────────────────────
+
+export async function getDraftSession(): Promise<DraftSession | null> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.DRAFT_SESSION);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export async function saveDraftSession(draft: DraftSession): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KEYS.DRAFT_SESSION, JSON.stringify(draft));
+  } catch (err) {
+    console.error('[storage] Failed to save draft:', err);
+  }
+}
+
+export async function clearDraftSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(KEYS.DRAFT_SESSION);
+  } catch {}
+}
+
+// ─── User Exercises ───────────────────────────────────────────────────────────
+
+export const getUserExercises = (): Promise<UserExercise[]> => getList<UserExercise>(KEYS.USER_EXERCISES);
+
+export async function saveUserExercise(exercise: UserExercise): Promise<void> {
+  const list = await getUserExercises();
+  const idx = list.findIndex(e => e.id === exercise.id);
+  if (idx >= 0) list[idx] = exercise; else list.unshift(exercise);
+  await saveList(KEYS.USER_EXERCISES, list);
 }
 
 // ─── Goals ────────────────────────────────────────────────────────────────────
