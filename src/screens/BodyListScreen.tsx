@@ -53,7 +53,7 @@ export default function BodyListScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Bilans</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('NewCheckin', {})}>
-          <Ionicons name="add" size={22} color={colors.text} />
+          <Ionicons name="add" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -229,17 +229,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg, backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.round,
   },
-  emptyBtnText: { ...typography.bodyBold, color: colors.text },
+  emptyBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
     marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
+    overflow: 'hidden',
   },
   latestBadge: {
     position: 'absolute', top: 0, right: 0,
     backgroundColor: colors.primary, paddingHorizontal: spacing.sm, paddingVertical: 3,
     borderTopRightRadius: borderRadius.lg, borderBottomLeftRadius: borderRadius.sm,
   },
-  latestBadgeText: { ...typography.tiny, color: colors.text, fontWeight: '700' },
+  latestBadgeText: { ...typography.tiny, color: '#FFFFFF', fontWeight: '700' },
   cardTop: { flexDirection: 'row', alignItems: 'center' },
   cardLeft: { flex: 1 },
   cardDate: { ...typography.label, color: colors.textSecondary },
