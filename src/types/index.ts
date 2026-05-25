@@ -80,8 +80,21 @@ export type WeeklyTemplate = Partial<Record<string, string>>; // dayIndex → pr
 
 // ─── User Profile ─────────────────────────────────────────────────────────────
 
+export type Gender = 'male' | 'female';
+export type FitnessGoal = 'lose' | 'maintain' | 'gain';
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+
 export interface UserProfile {
   firstName: string;
+  lastName?: string;
+  age?: number;
+  gender?: Gender;
+  heightCm?: number;
+  weightKg?: number;
+  goal?: FitnessGoal;
+  activityLevel?: ActivityLevel;
+  macroMode?: 'auto' | 'manual';
+  isSetupComplete?: boolean;
 }
 
 // ─── Nutrition ────────────────────────────────────────────────────────────────
@@ -155,6 +168,11 @@ export interface UserGoals {
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
+
+export type AuthStackParamList = {
+  Welcome: undefined;
+  ProfileSetup: undefined;
+};
 
 export type RootTabParamList = {
   Dashboard: undefined;
