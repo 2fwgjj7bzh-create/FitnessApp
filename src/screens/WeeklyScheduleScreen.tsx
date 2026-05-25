@@ -266,5 +266,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.round,
     paddingHorizontal: spacing.sm, paddingVertical: 3,
   },
-  todayBadgeText: { ...typography.tiny, color: colors.text, fontWeight: '700' },
+  todayBadgeText: { ...typography.tiny, color: '#FFFFFF', fontWeight: '700' },
 });

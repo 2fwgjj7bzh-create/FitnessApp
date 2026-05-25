@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { saveWorkout, getPrograms, getWorkouts, saveProgram, getDraftSession, saveDraftSession, clearDraftSession, getUserExercises, saveUserExercise } from '../storage';
 import { uid, formatDateLong } from '../utils/helpers';
-import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, DraftSession, UserExercise } from '../types';
+import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type PickerItem = ExerciseTemplate & { photoUri?: string };
@@ -913,7 +913,7 @@ function SummaryModal({ visible, workoutName, exercises, onClose }: {
 
         <View style={smStyles.footer}>
           <TouchableOpacity style={smStyles.closeBtn} onPress={onClose}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.text} />
+            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
             <Text style={smStyles.closeBtnText}>Terminer</Text>
           </TouchableOpacity>
         </View>
@@ -970,7 +970,7 @@ const smStyles = StyleSheet.create({
     padding: spacing.md, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
   },
-  closeBtnText: { ...typography.bodyBold, color: colors.text, fontSize: 16 },
+  closeBtnText: { ...typography.bodyBold, color: '#FFFFFF', fontSize: 16 },
 });
 
 // ─── Create Exercise Modal ────────────────────────────────────────────────────
@@ -1052,7 +1052,7 @@ function CreateExerciseModal({ visible, initialName, onConfirm, onCancel }: {
               onPress={() => name.trim() && onConfirm(name.trim(), group, photoUri)}
               disabled={!name.trim()}
             >
-              <Ionicons name="add-circle" size={18} color={colors.text} />
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
               <Text style={ceStyles.confirmBtnText}>Créer et ajouter à la séance</Text>
             </TouchableOpacity>
 
@@ -1103,7 +1103,7 @@ const ceStyles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  confirmBtnText: { ...typography.bodyBold, color: colors.text },
+  confirmBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
   cancelBtn: {
     backgroundColor: colors.card, borderRadius: borderRadius.round,
     padding: spacing.md, alignItems: 'center',
@@ -1332,7 +1332,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: borderRadius.round,
   },
-  finishBtnText: { ...typography.bodyBold, color: colors.text },
+  finishBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
   content: { padding: spacing.md },
   addExBtn: {
     flexDirection: 'row',

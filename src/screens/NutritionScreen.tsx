@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-  Modal, KeyboardAvoidingView, Platform, Dimensions, PanResponder,
+  Modal, KeyboardAvoidingView, Platform, PanResponder,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1029,7 +1029,7 @@ const bmrStyles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
   },
-  applyBtnText: { ...typography.bodyBold, color: colors.text, fontSize: 16 },
+  applyBtnText: { ...typography.bodyBold, color: '#FFFFFF', fontSize: 16 },
 });
 
 const gStyles = StyleSheet.create({
@@ -1072,7 +1072,7 @@ const gStyles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.round, padding: spacing.md,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
   },
-  saveBtnText: { ...typography.bodyBold, color: colors.text },
+  saveBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
 });
 
 const mStyles = StyleSheet.create({

@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { getPrograms, saveProgram } from '../storage';
 import { uid } from '../utils/helpers';
-import { ProgramExercise, ProgramSet, WorkoutProgram, WorkoutStackParamList } from '../types';
+import { ProgramExercise, WorkoutProgram, WorkoutStackParamList } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment } from '../data/exerciseDatabase';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'CreateProgram'>;
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, paddingHorizontal: spacing.md,
     paddingVertical: 8, borderRadius: borderRadius.round,
   },
-  saveBtnText: { ...typography.bodyBold, color: colors.text },
+  saveBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
   content: { padding: spacing.md },
   nameInput: {
     ...typography.h2, color: colors.text,

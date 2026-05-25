@@ -139,7 +139,7 @@ export default function DashboardScreen() {
             style={styles.startBtn}
             onPress={() => (navigation as any).navigate('WorkoutTab', { screen: 'WorkoutList' })}
           >
-            <Ionicons name="add" size={20} color={colors.text} />
+            <Ionicons name="add" size={20} color="#FFFFFF" />
             <Text style={styles.startBtnText}>Séance</Text>
           </TouchableOpacity>
         </View>
@@ -167,7 +167,7 @@ export default function DashboardScreen() {
               </View>
             </View>
             <View style={styles.playBtn}>
-              <Ionicons name="play" size={18} color={colors.text} />
+              <Ionicons name="play" size={18} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
         ) : (
@@ -294,7 +294,7 @@ export default function DashboardScreen() {
             <Text style={styles.emptyText}>Aucune séance enregistrée</Text>
             <Text style={styles.emptySubText}>Lance ta première séance dès maintenant</Text>
             <View style={styles.emptyBtn}>
-              <Ionicons name="add" size={14} color={colors.text} />
+              <Ionicons name="add" size={14} color="#FFFFFF" />
               <Text style={styles.emptyBtnText}>Commencer</Text>
             </View>
           </TouchableOpacity>
@@ -437,16 +437,16 @@ const modalStyles = StyleSheet.create({
   boxHint: { ...typography.caption, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md },
   btnRow: { flexDirection: 'row', gap: spacing.sm },
   cancel: {
-    flex: 1, backgroundColor: colors.card, borderRadius: borderRadius.round,
+    flex: 1, backgroundColor: colors.card, borderRadius: borderRadius.sm,
     paddingVertical: 14, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
   cancelText: { ...typography.bodyBold, color: colors.textSecondary },
   confirm: {
-    flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.round,
+    flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.sm,
     paddingVertical: 14, alignItems: 'center',
   },
-  confirmText: { ...typography.bodyBold, color: colors.text },
+  confirmText: { ...typography.bodyBold, color: '#FFFFFF' },
 });
 
 const styles = StyleSheet.create({
@@ -459,8 +459,8 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.primary + '22',
-    borderWidth: 2, borderColor: colors.primary + '55',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
   },
   avatarLetter: { ...typography.h3, color: colors.primary, fontWeight: '700' as const },
@@ -471,10 +471,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md, paddingVertical: 10,
-    borderRadius: borderRadius.round, gap: 4,
+    borderRadius: borderRadius.sm, gap: 4,
     minHeight: 44,
   },
-  startBtnText: { ...typography.bodyBold, color: colors.text },
+  startBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
 
   // Today banner
   todayBanner: {
@@ -488,13 +488,13 @@ const styles = StyleSheet.create({
   todayBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1, padding: spacing.md },
   todayBannerIcon: {
     width: 36, height: 36, borderRadius: borderRadius.sm,
-    backgroundColor: colors.primary + '22', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center',
   },
   todayBannerLabel: { ...typography.tiny, color: colors.primary, fontWeight: '700' as const, letterSpacing: 0.5 },
   todayBannerTitle: { ...typography.bodyBold, color: colors.text, marginTop: 2 },
   todayBannerSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   playBtn: {
-    width: 44, height: 44, margin: spacing.sm,
+    width: 40, height: 40, margin: spacing.sm,
     backgroundColor: colors.primary, borderRadius: borderRadius.sm,
     justifyContent: 'center', alignItems: 'center',
   },
@@ -524,8 +524,9 @@ const styles = StyleSheet.create({
   weekCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   weekCardTitle: { ...typography.bodyBold, color: colors.text, flex: 1 },
   weekCardBadge: {
-    backgroundColor: colors.primary + '22', borderRadius: borderRadius.round,
+    backgroundColor: colors.surface, borderRadius: borderRadius.round,
     paddingHorizontal: spacing.sm, paddingVertical: 3,
+    borderWidth: 1, borderColor: colors.border,
   },
   weekCardCount: { ...typography.label, color: colors.primary, fontWeight: '700' as const },
   dotRow: { flexDirection: 'row', height: 10 },
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm, flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden',
   },
-  workoutAccent: { width: 3, alignSelf: 'stretch', backgroundColor: colors.secondary + '80' },
+  workoutAccent: { width: 3, alignSelf: 'stretch', backgroundColor: colors.primary },
   workoutCardLeft: { flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.md },
   workoutName: { ...typography.bodyBold, color: colors.text },
   workoutMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
@@ -573,8 +574,8 @@ const styles = StyleSheet.create({
   },
   emptyIconRing: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: colors.primary + '15',
-    borderWidth: 2, borderColor: colors.primary + '30',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
     marginBottom: spacing.sm,
   },
@@ -582,8 +583,8 @@ const styles = StyleSheet.create({
   emptySubText: { ...typography.caption, color: colors.textMuted },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.primary, borderRadius: borderRadius.round,
+    backgroundColor: colors.primary, borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.md, paddingVertical: 10, marginTop: spacing.sm,
   },
-  emptyBtnText: { ...typography.label, color: colors.text, fontWeight: '700' as const },
+  emptyBtnText: { ...typography.label, color: '#FFFFFF', fontWeight: '700' as const },
 });

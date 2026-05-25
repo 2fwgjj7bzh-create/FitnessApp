@@ -665,7 +665,7 @@ const calcStyles = StyleSheet.create({
   },
   fChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   fChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
-  fChipTextActive: { color: colors.text },
+  fChipTextActive: { color: '#FFFFFF' },
   stepper: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
   tabBtn: { flex: 1, paddingVertical: 8, borderRadius: borderRadius.round, alignItems: 'center' },
   tabBtnActive: { backgroundColor: colors.primary },
   tabBtnText: { ...typography.bodyBold, color: colors.textSecondary },
-  tabBtnTextActive: { color: colors.text },
+  tabBtnTextActive: { color: '#FFFFFF' },
   content: { paddingHorizontal: spacing.md },
   emptyState: { alignItems: 'center', paddingTop: 80, gap: spacing.md },
   emptyTitle: { ...typography.h3, color: colors.textSecondary },

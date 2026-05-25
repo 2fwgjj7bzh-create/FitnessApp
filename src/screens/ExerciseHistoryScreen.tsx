@@ -40,7 +40,7 @@ function isoWeekKey(dateStr: string): string {
 }
 
 function weekLabel(key: string): string {
-  const [year, w] = key.split('-W');
+  const [, w] = key.split('-W');
   return `S${w}`;
 }
 
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   tabBtnActive: { backgroundColor: colors.primary },
   tabBtnText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
-  tabBtnTextActive: { color: colors.text },
+  tabBtnTextActive: { color: '#FFFFFF' },
   chartCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,

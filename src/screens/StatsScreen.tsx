@@ -347,6 +347,6 @@ const styles = StyleSheet.create({
   periodBtn: { flex: 1, paddingVertical: 8, borderRadius: borderRadius.sm, alignItems: 'center' },
   periodBtnActive: { backgroundColor: colors.primary },
   periodText: { ...typography.label, color: colors.textSecondary },
-  periodTextActive: { color: colors.text, fontWeight: '600' },
+  periodTextActive: { color: '#FFFFFF', fontWeight: '600' },
   kpiRow: { flexDirection: 'row', marginBottom: spacing.sm },
 });

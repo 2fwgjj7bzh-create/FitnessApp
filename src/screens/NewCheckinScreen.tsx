@@ -61,7 +61,7 @@ export default function NewCheckinScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [3, 4],
       quality: 0.8,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 8,
     borderRadius: borderRadius.round,
   },
-  saveBtnText: { ...typography.bodyBold, color: colors.text },
+  saveBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
   content: { padding: spacing.md },
 
   // Weight
