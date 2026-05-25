@@ -130,7 +130,7 @@ export default function WorkoutListScreen() {
           </TouchableOpacity>
           {tab !== 'calc' && (
             <TouchableOpacity style={styles.addBtn} onPress={addBtnPress}>
-              <Ionicons name="add" size={22} color={colors.text} />
+              <Ionicons name="add" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -400,7 +400,7 @@ function ProgramCard({ program, onEdit, onDelete, onStart }: {
           )}
         </View>
         <TouchableOpacity style={progStyles.startBtn} onPress={onStart}>
-          <Ionicons name="play" size={15} color={colors.text} />
+          <Ionicons name="play" size={15} color="#FFFFFF" />
           <Text style={progStyles.startBtnText}>Démarrer</Text>
         </TouchableOpacity>
       </View>
@@ -481,7 +481,7 @@ const progStyles = StyleSheet.create({
     gap: spacing.sm, backgroundColor: colors.primary,
     borderRadius: borderRadius.round, paddingVertical: spacing.sm,
   },
-  startBtnText: { ...typography.bodyBold, color: colors.text },
+  startBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
 });
 
 const cardStyles = StyleSheet.create({
