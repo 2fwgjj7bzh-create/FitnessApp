@@ -443,7 +443,7 @@ export default function WorkoutSessionScreen() {
                   ? (
                     <TouchableOpacity
                       style={pickerStyles.item}
-                      onPress={() => { setCreateInitialName(pickerSearch); setShowCreateModal(true); }}
+                      onPress={() => { setCreateInitialName(pickerSearch); setShowPicker(false); setShowCreateModal(true); }}
                     >
                       <View style={pickerStyles.itemLeft}>
                         <Ionicons name="add-circle" size={18} color={colors.primary} />
