@@ -8,9 +8,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { getPrograms, saveProgram } from '../storage';
+import { getPrograms, saveProgram, getUserExercises } from '../storage';
 import { uid } from '../utils/helpers';
-import { ProgramExercise, WorkoutProgram, WorkoutStackParamList } from '../types';
+import { ProgramExercise, WorkoutProgram, WorkoutStackParamList, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment } from '../data/exerciseDatabase';
 
 type NavProp = NativeStackNavigationProp<WorkoutStackParamList, 'CreateProgram'>;
@@ -38,8 +38,10 @@ export default function CreateProgramScreen() {
   const [pickerGroup, setPickerGroup] = useState('Tous');
   const [pickerEquipment, setPickerEquipment] = useState<Equipment | 'Tous'>('Tous');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
 
   useEffect(() => {
+    getUserExercises().then(setUserExercises);
     if (editId) {
       getPrograms().then(list => {
         const prog = list.find(p => p.id === editId);
@@ -115,9 +117,15 @@ export default function CreateProgramScreen() {
     navigation.goBack();
   };
 
-  const filtered = EXERCISE_DATABASE.filter(e => {
+  // Fusionne exercices perso + base de données (perso en premier)
+  const allExercises = [
+    ...userExercises.map(e => ({ name: e.name, muscleGroup: e.muscleGroup ?? '', equipment: undefined as any, isCustom: true })),
+    ...EXERCISE_DATABASE.map(e => ({ ...e, isCustom: false })),
+  ];
+
+  const filtered = allExercises.filter(e => {
     const matchGroup = pickerGroup === 'Tous' || e.muscleGroup === pickerGroup;
-    const matchEquip = pickerEquipment === 'Tous' || e.equipment === pickerEquipment;
+    const matchEquip = pickerEquipment === 'Tous' || e.isCustom || e.equipment === pickerEquipment;
     const matchSearch = !pickerSearch || e.name.toLowerCase().includes(pickerSearch.toLowerCase());
     return matchGroup && matchEquip && matchSearch;
   });
@@ -233,10 +241,19 @@ export default function CreateProgramScreen() {
                   <View style={pickerStyles.itemLeft}>
                     <Text style={pickerStyles.itemName}>{item.name}</Text>
                   </View>
-                  <View style={[pickerStyles.groupTag, { backgroundColor: (MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary) + '33' }]}>
-                    <Text style={[pickerStyles.groupTagText, { color: MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary }]}>
-                      {item.muscleGroup}
-                    </Text>
+                  <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                    {item.isCustom && (
+                      <View style={[pickerStyles.groupTag, { backgroundColor: colors.success + '22' }]}>
+                        <Text style={[pickerStyles.groupTagText, { color: colors.success }]}>Perso</Text>
+                      </View>
+                    )}
+                    {!!item.muscleGroup && (
+                      <View style={[pickerStyles.groupTag, { backgroundColor: (MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary) + '33' }]}>
+                        <Text style={[pickerStyles.groupTagText, { color: MUSCLE_GROUP_COLORS[item.muscleGroup] ?? colors.primary }]}>
+                          {item.muscleGroup}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
               )}
@@ -443,7 +460,7 @@ const rowStyles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
-  badgeText: { ...typography.caption, color: colors.text, fontWeight: '700' },
+  badgeText: { ...typography.caption, color: '#FFFFFF', fontWeight: '700' },
   headerMid: { flex: 1, gap: 4 },
   name: { ...typography.bodyBold, color: colors.text },
   headerMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
