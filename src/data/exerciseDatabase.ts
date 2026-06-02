@@ -223,6 +223,26 @@ export const EXERCISE_DATABASE: ExerciseTemplate[] = [
   { name: 'Pallof press',                   muscleGroup: 'Abdominaux', equipment: 'Machine' },
   { name: 'Landmine rotation',              muscleGroup: 'Abdominaux', equipment: 'Poids libre' },
 
+  // ─── Adducteurs ──────────────────────────────────────────────────────────────
+  { name: 'Adduction hanche machine assise',   muscleGroup: 'Adducteurs', equipment: 'Machine' },
+  { name: 'Adduction hanche câble debout',     muscleGroup: 'Adducteurs', equipment: 'Machine' },
+  { name: 'Adduction hanche câble couché',     muscleGroup: 'Adducteurs', equipment: 'Machine' },
+  { name: 'Squat sumo barre',                  muscleGroup: 'Adducteurs', equipment: 'Poids libre' },
+  { name: 'Squat sumo haltère',                muscleGroup: 'Adducteurs', equipment: 'Poids libre' },
+  { name: 'Fentes larges sumo',                muscleGroup: 'Adducteurs', equipment: 'Poids libre' },
+  { name: 'Copenhagen plank',                  muscleGroup: 'Adducteurs', equipment: 'Poids du corps' },
+  { name: 'Squeeze ballon',                    muscleGroup: 'Adducteurs', equipment: 'Poids du corps' },
+
+  // ─── Abducteurs ──────────────────────────────────────────────────────────────
+  { name: 'Abduction hanche machine assise',   muscleGroup: 'Abducteurs', equipment: 'Machine' },
+  { name: 'Abduction hanche câble debout',     muscleGroup: 'Abducteurs', equipment: 'Machine' },
+  { name: 'Abduction hanche câble couché',     muscleGroup: 'Abducteurs', equipment: 'Machine' },
+  { name: 'Élévation latérale jambe câble',    muscleGroup: 'Abducteurs', equipment: 'Machine' },
+  { name: 'Clamshells',                        muscleGroup: 'Abducteurs', equipment: 'Poids du corps' },
+  { name: 'Fire hydrant',                      muscleGroup: 'Abducteurs', equipment: 'Poids du corps' },
+  { name: 'Élévation latérale jambe couché',   muscleGroup: 'Abducteurs', equipment: 'Poids du corps' },
+  { name: 'Monster walk élastique',            muscleGroup: 'Abducteurs', equipment: 'Poids du corps' },
+
   // ─── Cardio ──────────────────────────────────────────────────────────────────
   { name: 'Tapis de course',                muscleGroup: 'Cardio', equipment: 'Machine' },
   { name: 'Vélo elliptique',                muscleGroup: 'Cardio', equipment: 'Machine' },
@@ -253,6 +273,8 @@ export const MUSCLE_GROUPS = [
   'Quadriceps',
   'Ischio-jambiers',
   'Fessiers',
+  'Adducteurs',
+  'Abducteurs',
   'Mollets',
   'Abdominaux',
   'Cardio',
@@ -267,6 +289,8 @@ export const MUSCLE_GROUP_COLORS: Record<string, string> = {
   'Quadriceps':       '#A89BFF',
   'Ischio-jambiers':  '#FF9F7F',
   'Fessiers':         '#F06292',
+  'Adducteurs':       '#EC407A',
+  'Abducteurs':       '#AB47BC',
   'Mollets':          '#81C784',
   'Abdominaux':       '#FF8A65',
   'Cardio':           '#4FC3F7',

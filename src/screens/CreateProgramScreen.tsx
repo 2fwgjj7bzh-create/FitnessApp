@@ -8,7 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { getPrograms, saveProgram, getUserExercises } from '../storage';
+import { getPrograms, saveProgram, getUserExercises, saveUserExercise } from '../storage';
 import { uid } from '../utils/helpers';
 import { ProgramExercise, WorkoutProgram, WorkoutStackParamList, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment } from '../data/exerciseDatabase';
@@ -50,9 +50,20 @@ export default function CreateProgramScreen() {
     }
   }, [editId]);
 
-  const addExercise = (exName: string, muscleGroup?: string) => {
+  const addExercise = async (exName: string, muscleGroup?: string) => {
+    const isCustom = !EXERCISE_DATABASE.some(
+      e => e.name.toLowerCase() === exName.trim().toLowerCase(),
+    );
+    if (isCustom) {
+      const newUserEx: UserExercise = {
+        id: uid(), name: exName.trim(), muscleGroup,
+        createdAt: new Date().toISOString(),
+      };
+      await saveUserExercise(newUserEx);
+      setUserExercises(prev => [newUserEx, ...prev]);
+    }
     const ex: ProgramExercise = {
-      id: uid(), name: exName, muscleGroup,
+      id: uid(), name: exName.trim(), muscleGroup,
       sets: [
         { id: uid(), repsRange: '8-12' },
         { id: uid(), repsRange: '8-12' },
