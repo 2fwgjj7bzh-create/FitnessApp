@@ -175,11 +175,15 @@ export type AuthStackParamList = {
 };
 
 export type RootTabParamList = {
-  Dashboard: undefined;
-  WorkoutTab: undefined;
+  Dashboard:    undefined;
+  ProgramsTab:  undefined;
+  WorkoutTab:   undefined;
+  ProgressTab:  undefined;
+  ProfileTab:   undefined;
+  // Conservés pour compatibilité avec les refs existantes
   NutritionTab: undefined;
-  BodyTab: undefined;
-  StatsTab: undefined;
+  BodyTab:      undefined;
+  StatsTab:     undefined;
 };
 
 export type WorkoutStackParamList = {

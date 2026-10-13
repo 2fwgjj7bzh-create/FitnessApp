@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { RootTabParamList, WorkoutStackParamList, BodyStackParamList, AuthStackParamList } from '../types';
-import { getProfile } from '../storage';
+import { AuthProvider, useAuth } from '../lib/authContext';
 
 import DashboardScreen from '../screens/DashboardScreen';
 import WorkoutListScreen from '../screens/WorkoutListScreen';
@@ -14,19 +14,14 @@ import WorkoutSessionScreen from '../screens/WorkoutSessionScreen';
 import CreateProgramScreen from '../screens/CreateProgramScreen';
 import ExerciseHistoryScreen from '../screens/ExerciseHistoryScreen';
 import WeeklyScheduleScreen from '../screens/WeeklyScheduleScreen';
+import StatsScreen from '../screens/StatsScreen';
 import NutritionScreen from '../screens/NutritionScreen';
 import BodyListScreen from '../screens/BodyListScreen';
 import NewCheckinScreen from '../screens/NewCheckinScreen';
-import TimerScreen from '../screens/TimerScreen';
-import StatsScreen from '../screens/StatsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import EbookLibraryScreen from '../screens/EbookLibraryScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
-
-// ─── Auth Context ─────────────────────────────────────────────────────────────
-
-export const AuthContext = createContext<{ onSetupComplete: () => void }>({
-  onSetupComplete: () => {},
-});
 
 // ─── Navigators ───────────────────────────────────────────────────────────────
 
@@ -39,11 +34,11 @@ const RootStack = createNativeStackNavigator();
 function WorkoutNavigator() {
   return (
     <WorkoutStack.Navigator screenOptions={{ headerShown: false }}>
-      <WorkoutStack.Screen name="WorkoutList" component={WorkoutListScreen} />
-      <WorkoutStack.Screen name="WorkoutSession" component={WorkoutSessionScreen} />
-      <WorkoutStack.Screen name="CreateProgram" component={CreateProgramScreen} />
+      <WorkoutStack.Screen name="WorkoutList"     component={WorkoutListScreen} />
+      <WorkoutStack.Screen name="WorkoutSession"  component={WorkoutSessionScreen} />
+      <WorkoutStack.Screen name="CreateProgram"   component={CreateProgramScreen} />
       <WorkoutStack.Screen name="ExerciseHistory" component={ExerciseHistoryScreen} />
-      <WorkoutStack.Screen name="WeeklySchedule" component={WeeklyScheduleScreen} />
+      <WorkoutStack.Screen name="WeeklySchedule"  component={WeeklyScheduleScreen} />
     </WorkoutStack.Navigator>
   );
 }
@@ -51,11 +46,20 @@ function WorkoutNavigator() {
 function BodyNavigator() {
   return (
     <BodyStack.Navigator screenOptions={{ headerShown: false }}>
-      <BodyStack.Screen name="BodyList" component={BodyListScreen} />
+      <BodyStack.Screen name="BodyList"   component={BodyListScreen} />
       <BodyStack.Screen name="NewCheckin" component={NewCheckinScreen} />
     </BodyStack.Navigator>
   );
 }
+
+const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
+  Dashboard:    { active: 'home',        inactive: 'home-outline' },
+  ProgramsTab:  { active: 'library',     inactive: 'library-outline' },
+  WorkoutTab:   { active: 'barbell',     inactive: 'barbell-outline' },
+  NutritionTab: { active: 'nutrition',   inactive: 'nutrition-outline' },
+  ProgressTab:  { active: 'stats-chart', inactive: 'stats-chart-outline' },
+  ProfileTab:   { active: 'person',      inactive: 'person-outline' },
+};
 
 function MainTabNavigator() {
   return (
@@ -72,30 +76,35 @@ function MainTabNavigator() {
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginTop: 2,
-        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' as const, marginTop: 2 },
         tabBarIcon: ({ focused, color, size }) => {
-          const icons: Record<string, { active: string; inactive: string }> = {
-            Dashboard: { active: 'home', inactive: 'home-outline' },
-            WorkoutTab: { active: 'barbell', inactive: 'barbell-outline' },
-            NutritionTab: { active: 'nutrition', inactive: 'nutrition-outline' },
-            BodyTab: { active: 'body', inactive: 'body-outline' },
-            StatsTab: { active: 'stats-chart', inactive: 'stats-chart-outline' },
-          };
-          const icon = icons[route.name];
+          const icon = TAB_ICONS[route.name];
           const name = (focused ? icon?.active : icon?.inactive) as any;
+          // Onglet central (Entraînement) mis en avant avec fond or
+          if (route.name === 'WorkoutTab') {
+            return (
+              <View style={{
+                width: 44, height: 44, borderRadius: 22,
+                backgroundColor: focused ? colors.primary : colors.surface,
+                borderWidth: focused ? 0 : 1,
+                borderColor: colors.border,
+                justifyContent: 'center', alignItems: 'center',
+                marginTop: -8,
+              }}>
+                <Ionicons name={name} size={22} color={focused ? '#0A0A0A' : colors.textMuted} />
+              </View>
+            );
+          }
           return <Ionicons name={name} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarLabel: 'Accueil' }} />
-      <Tab.Screen name="WorkoutTab" component={WorkoutNavigator} options={{ tabBarLabel: 'Workout' }} />
-      <Tab.Screen name="NutritionTab" component={NutritionScreen} options={{ tabBarLabel: 'Nutrition' }} />
-      <Tab.Screen name="BodyTab" component={BodyNavigator} options={{ tabBarLabel: 'Bilan' }} />
-      <Tab.Screen name="StatsTab" component={StatsScreen} options={{ tabBarLabel: 'Stats' }} />
+      <Tab.Screen name="Dashboard"   component={DashboardScreen}    options={{ tabBarLabel: 'Accueil' }} />
+      <Tab.Screen name="ProgramsTab" component={EbookLibraryScreen} options={{ tabBarLabel: 'Programmes' }} />
+      <Tab.Screen name="WorkoutTab"  component={WorkoutNavigator}   options={{ tabBarLabel: 'Séance' }} />
+      <Tab.Screen name="NutritionTab" component={NutritionScreen}   options={{ tabBarLabel: 'Nutrition' }} />
+      <Tab.Screen name="ProgressTab" component={StatsScreen}        options={{ tabBarLabel: 'Progression' }} />
+      <Tab.Screen name="ProfileTab"  component={ProfileScreen}      options={{ tabBarLabel: 'Profil' }} />
     </Tab.Navigator>
   );
 }
@@ -103,38 +112,29 @@ function MainTabNavigator() {
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+      <AuthStack.Screen name="Welcome"      component={WelcomeScreen} />
       <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
     </AuthStack.Navigator>
   );
 }
 
-function RootNavigator({ setupDone }: { setupDone: boolean }) {
-  return (
-    <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-      {setupDone ? (
+// ─── Root : aiguillage Auth vs App ───────────────────────────────────────────
+
+// Bypass temporaire demandé pour tester sans compte Supabase — repasser à false pour réactiver l'auth
+const BYPASS_AUTH = true;
+
+function RootNavigator() {
+  const { session, loading } = useAuth();
+
+  if (BYPASS_AUTH) {
+    return (
+      <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         <RootStack.Screen name="Main" component={MainTabNavigator} />
-      ) : (
-        <RootStack.Screen name="Auth" component={AuthNavigator} />
-      )}
-    </RootStack.Navigator>
-  );
-}
+      </RootStack.Navigator>
+    );
+  }
 
-// ─── Root ─────────────────────────────────────────────────────────────────────
-
-export default function AppNavigator() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [setupDone, setSetupDone] = useState(false);
-
-  useEffect(() => {
-    getProfile().then(profile => {
-      setSetupDone(profile.isSetupComplete === true);
-      setIsLoading(false);
-    });
-  }, []);
-
-  if (isLoading) {
+  if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -143,10 +143,27 @@ export default function AppNavigator() {
   }
 
   return (
-    <AuthContext.Provider value={{ onSetupComplete: () => setSetupDone(true) }}>
-      <NavigationContainer>
-        <RootNavigator setupDone={setupDone} />
-      </NavigationContainer>
-    </AuthContext.Provider>
+    <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+      {session ? (
+        <RootStack.Screen name="Main" component={MainTabNavigator} />
+      ) : (
+        <RootStack.Screen name="Auth" component={AuthNavigator} />
+      )}
+    </RootStack.Navigator>
   );
 }
+
+export default function AppNavigator() {
+  return (
+    <AuthProvider>
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>
+    </AuthProvider>
+  );
+}
+
+// Compat export — ProfileSetupScreen importe AuthContext depuis ici
+export const AuthContext = React.createContext<{ onSetupComplete: () => void }>({
+  onSetupComplete: () => {},
+});

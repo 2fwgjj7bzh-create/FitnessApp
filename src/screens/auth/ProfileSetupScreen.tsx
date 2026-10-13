@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Gender, FitnessGoal, ActivityLevel, UserGoals } from '../../types';
 import { saveProfile, saveGoals } from '../../storage';
 import { calcGoalsFromProfile } from '../../utils/macroCalculator';
-import { AuthContext } from '../../navigation/AppNavigator';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/authContext';
 
 const TOTAL_STEPS = 7;
 
@@ -76,7 +77,7 @@ const STEP_TITLES: Record<number, { label: string; title: string }> = {
 };
 
 export default function ProfileSetupScreen() {
-  const { onSetupComplete } = useContext(AuthContext);
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
   const [saving, setSaving] = useState(false);
@@ -118,6 +119,7 @@ export default function ProfileSetupScreen() {
             fatMult: 0.4,
           };
 
+      // Sauvegarde locale (pour l'accès offline)
       await saveProfile({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim() || undefined,
@@ -131,7 +133,41 @@ export default function ProfileSetupScreen() {
         isSetupComplete: true,
       });
       await saveGoals(macros);
-      onSetupComplete();
+
+      // Sauvegarde Supabase (sync cloud)
+      if (user?.id) {
+        const db = supabase as any;
+        await db.from('profiles').update({
+          first_name: form.firstName.trim(),
+          age: form.age,
+          gender: form.gender,
+          height_cm: form.heightCm,
+          weight_kg: form.weightKg,
+          goal: form.goal,
+          activity_level: form.activityLevel,
+          niveau: 'débutant',
+        }).eq('id', user.id);
+
+        await db.from('user_goals').upsert({
+          user_id: user.id,
+          workouts_per_week: macros.workoutsPerWeek,
+          calorie_goal: macros.calorieGoal,
+          protein_goal: macros.proteinGoal,
+          carbs_goal: macros.carbsGoal,
+          fat_goal: macros.fatGoal,
+        });
+
+        // Enregistre le poids initial dans body_measurements
+        if (form.weightKg) {
+          await db.from('body_measurements').upsert({
+            user_id: user.id,
+            date: new Date().toISOString().split('T')[0],
+            poids_corps: form.weightKg,
+          });
+        }
+      }
+
+      // Navigation handled automatically by Supabase onAuthStateChange → RootNavigator
     } finally {
       setSaving(false);
     }

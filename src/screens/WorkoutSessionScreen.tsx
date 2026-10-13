@@ -9,7 +9,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { saveWorkout, getPrograms, getWorkouts, saveProgram, getDraftSession, saveDraftSession, clearDraftSession, getUserExercises, saveUserExercise } from '../storage';
+import { getPrograms, getWorkouts, saveProgram, getDraftSession, saveDraftSession, clearDraftSession, getUserExercises, saveUserExercise } from '../storage';
+import { syncWorkout } from '../lib/workoutSync';
 import { uid, formatDateLong } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
@@ -45,6 +46,7 @@ export default function WorkoutSessionScreen() {
   const [currentProgramId, setCurrentProgramId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [sessionPRs, setSessionPRs] = useState<string[]>([]);
   const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createInitialName, setCreateInitialName] = useState('');
@@ -214,7 +216,7 @@ export default function WorkoutSessionScreen() {
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      await saveWorkout({
+      const workoutObj = {
         id: uid(),
         name: workoutName,
         date: now,
@@ -222,7 +224,12 @@ export default function WorkoutSessionScreen() {
         exercises,
         notes,
         programId: currentProgramId,
-      });
+      };
+
+      // Sauvegarde locale + sync Supabase (avec détection PR)
+      const { prs } = await syncWorkout(workoutObj, undefined);
+      setSessionPRs(prs);
+
       // Sync exercises back to template — failure must NOT block the summary
       if (currentProgramId) {
         try {
@@ -366,6 +373,7 @@ export default function WorkoutSessionScreen() {
         visible={showSummary}
         workoutName={workoutName}
         exercises={exercises}
+        prs={sessionPRs}
         onClose={() => navigation.goBack()}
       />
 
@@ -831,10 +839,11 @@ const lbStyles = StyleSheet.create({
 
 // ─── Summary Modal ────────────────────────────────────────────────────────────
 
-function SummaryModal({ visible, workoutName, exercises, onClose }: {
+function SummaryModal({ visible, workoutName, exercises, prs, onClose }: {
   visible: boolean;
   workoutName: string;
   exercises: Exercise[];
+  prs: string[];
   onClose: () => void;
 }) {
   const allDone = exercises.flatMap(ex => ex.sets.filter(s => s.completed));
@@ -856,6 +865,19 @@ function SummaryModal({ visible, workoutName, exercises, onClose }: {
             <Text style={smStyles.heroTitle}>Séance terminée !</Text>
             <Text style={smStyles.heroSub}>{workoutName}</Text>
           </View>
+
+          {/* PRs */}
+          {prs.length > 0 && (
+            <View style={smStyles.prBanner}>
+              <Ionicons name="ribbon" size={18} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={smStyles.prTitle}>
+                  {prs.length} nouveau{prs.length > 1 ? 'x' : ''} record{prs.length > 1 ? 's' : ''} !
+                </Text>
+                <Text style={smStyles.prList}>{prs.join(' · ')}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Stats 2×2 */}
           <View style={smStyles.statsGrid}>
@@ -971,6 +993,14 @@ const smStyles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
   },
   closeBtnText: { ...typography.bodyBold, color: '#FFFFFF', fontSize: 16 },
+  prBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    backgroundColor: colors.primaryMuted, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.primary + '44',
+  },
+  prTitle: { ...typography.bodyBold, color: colors.primary },
+  prList: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
 });
 
 // ─── Create Exercise Modal ────────────────────────────────────────────────────

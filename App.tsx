@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto'; // requis par Supabase en React Native
 import React, { Component, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -33,17 +34,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorState> {
 }
 
 const errStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F0F13', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  title: { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  title: { color: '#F2F2F2', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 12 },
   msg: { color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 24 },
-  btn: { backgroundColor: '#7c6ff7', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  btnText: { color: '#fff', fontWeight: '700' },
+  btn: { backgroundColor: '#C9A84C', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+  btnText: { color: '#0A0A0A', fontWeight: '700' },
 });
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" backgroundColor="#0F0F13" />
+      <StatusBar style="light" backgroundColor="#0A0A0A" />
       <ErrorBoundary>
         <AppNavigator />
       </ErrorBoundary>
