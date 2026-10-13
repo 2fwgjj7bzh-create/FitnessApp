@@ -1,9 +1,10 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
   KeyboardAvoidingView, Platform, Modal, FlatList, Linking, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { getPrograms, getWorkouts, saveProgram, getDraftSession, saveDraftSession, clearDraftSession, getUserExercises, saveUserExercise } from '../storage';
 import { syncWorkout } from '../lib/workoutSync';
+import { DEFAULT_REST_SECONDS, scheduleRestEnd, cancelRestEnd, restEndFeedback, lightTap, formatClock } from '../lib/restTimer';
 import { uid, formatDateLong } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, UserExercise } from '../types';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
@@ -50,6 +52,74 @@ export default function WorkoutSessionScreen() {
   const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createInitialName, setCreateInitialName] = useState('');
+  const [allWorkouts, setAllWorkouts] = useState<Workout[]>([]);
+  const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString());
+  const [now, setNow] = useState(Date.now());
+  const [rest, setRest] = useState<{ end: number; total: number; notifId: string | null; exName?: string } | null>(null);
+  const [ready, setReady] = useState(false);       // brouillon auto activé une fois la reprise décidée
+  const finishedRef = useRef(false);
+
+  // L'écran reste allumé pendant toute la séance
+  useKeepAwake();
+
+  // Horloge : durée de séance + décompte du repos
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  // Fin du repos (appli ouverte) → vibration
+  useEffect(() => {
+    if (rest && now >= rest.end) {
+      restEndFeedback();
+      setRest(null);
+    }
+  }, [now, rest]);
+
+  const startRest = useCallback(async (seconds: number, exName?: string) => {
+    setRest(prev => { if (prev) cancelRestEnd(prev.notifId); return null; });
+    const end = Date.now() + seconds * 1000;
+    setRest({ end, total: seconds, notifId: null, exName });
+    const notifId = await scheduleRestEnd(seconds, exName);
+    setRest(prev => (prev && prev.end === end ? { ...prev, notifId } : (cancelRestEnd(notifId), prev)));
+  }, []);
+
+  const adjustRest = useCallback(async (delta: number) => {
+    if (!rest) return;
+    await cancelRestEnd(rest.notifId);
+    const remaining = Math.max(0, (rest.end - Date.now()) / 1000) + delta;
+    if (remaining <= 0) { setRest(null); return; }
+    const end = Date.now() + remaining * 1000;
+    setRest({ ...rest, end, total: Math.max(rest.total + delta, remaining), notifId: null });
+    const notifId = await scheduleRestEnd(remaining, rest.exName);
+    setRest(prev => (prev && prev.end === end ? { ...prev, notifId } : (cancelRestEnd(notifId), prev)));
+  }, [rest]);
+
+  const skipRest = useCallback(() => {
+    setRest(prev => { if (prev) cancelRestEnd(prev.notifId); return null; });
+  }, []);
+
+  // Brouillon enregistré en continu : rien n'est perdu si l'appli se ferme en pleine séance
+  useEffect(() => {
+    if (!ready || finishedRef.current || exercises.length === 0) return;
+    const t = setTimeout(() => {
+      if (finishedRef.current) return;
+      saveDraftSession({ workoutName, exercises, notes, programId: currentProgramId, startedAt, savedAt: new Date().toISOString() })
+        .catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [ready, workoutName, exercises, notes, currentProgramId, startedAt]);
+
+  const loadProgramHistory = useCallback((pid: string, workouts: Workout[]) => {
+    setCurrentProgramId(pid);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 84);
+    setPastSessions(
+      workouts
+        .filter(w => w.programId === pid && new Date(w.date) >= cutoff)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    );
+  }, []);
 
   const loadProgram = useCallback(async (pid: string) => {
     const [list, allWorkouts] = await Promise.all([getPrograms(), getWorkouts()]);
@@ -84,8 +154,9 @@ export default function WorkoutSessionScreen() {
 
   useEffect(() => {
     const pid = route.params?.programId;
-    Promise.all([getDraftSession(), getUserExercises()]).then(([draft, userEx]) => {
+    Promise.all([getDraftSession(), getUserExercises(), getWorkouts()]).then(([draft, userEx, workouts]) => {
       setUserExercises(userEx);
+      setAllWorkouts(workouts);
       if (draft) {
         Alert.alert(
           'Séance en cours',
@@ -97,7 +168,9 @@ export default function WorkoutSessionScreen() {
                 setWorkoutName(draft.workoutName);
                 setExercises(draft.exercises);
                 setNotes(draft.notes);
-                if (draft.programId) setCurrentProgramId(draft.programId);
+                if (draft.startedAt) setStartedAt(draft.startedAt);
+                if (draft.programId) loadProgramHistory(draft.programId, workouts);
+                setReady(true);
               },
             },
             {
@@ -106,26 +179,32 @@ export default function WorkoutSessionScreen() {
               onPress: () => {
                 clearDraftSession();
                 if (pid) loadProgram(pid);
+                setReady(true);
               },
             },
           ]
         );
-      } else if (pid) {
-        loadProgram(pid);
+      } else {
+        if (pid) loadProgram(pid);
+        setReady(true);
       }
     });
   }, []);
 
-  // Dernière perf par exercice (nom → sets de la dernière séance)
+  // Dernière perf par exercice, toutes séances confondues (nom → séries de travail validées)
   const lastPerfMap = React.useMemo(() => {
     const map: Record<string, ExerciseSet[]> = {};
-    pastSessions.forEach(session => {
-      session.exercises.forEach(ex => {
-        if (!map[ex.name]) map[ex.name] = ex.sets;
+    [...allWorkouts]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .forEach(session => {
+        session.exercises.forEach(ex => {
+          if (map[ex.name]) return;
+          const work = ex.sets.filter(s => s.completed && s.type !== 'warmup' && (s.reps > 0 || s.weight > 0));
+          if (work.length > 0) map[ex.name] = work;
+        });
       });
-    });
     return map;
-  }, [pastSessions]);
+  }, [allWorkouts]);
 
   const updatePhoto = useCallback((exId: string, photoUri: string | undefined) => {
     setExercises(prev => prev.map(e => e.id === exId ? { ...e, photoUri } : e));
@@ -188,7 +267,7 @@ export default function WorkoutSessionScreen() {
     }));
   }, []);
 
-  const updateSet = useCallback((exId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: string | boolean) => {
+  const updateSet = useCallback((exId: string, setId: string, field: 'reps' | 'weight' | 'rir' | 'completed', value: string | boolean) => {
     setExercises(prev => prev.map(e => {
       if (e.id !== exId) return e;
       return {
@@ -196,10 +275,43 @@ export default function WorkoutSessionScreen() {
         sets: e.sets.map(s => {
           if (s.id !== setId) return s;
           if (field === 'completed') return { ...s, completed: value as boolean };
-          const num = parseFloat(value as string);
+          const num = parseFloat(String(value).replace(',', '.'));
+          if (field === 'rir') return { ...s, rir: isNaN(num) ? undefined : num };
           return { ...s, [field]: isNaN(num) ? 0 : num };
         }),
       };
+    }));
+  }, []);
+
+  // Valider une série : complète les cases vides avec la séance précédente (ou le bas de la fourchette
+  // cible), puis lance le minuteur de repos. Re-toucher une série validée la dévalide.
+  const toggleSet = useCallback((exId: string, setId: string) => {
+    const ex = exercises.find(e => e.id === exId);
+    const idx = ex ? ex.sets.findIndex(s => s.id === setId) : -1;
+    if (!ex || idx < 0) return;
+    const set = ex.sets[idx];
+    if (set.completed) {
+      setExercises(prev => prev.map(e => e.id !== exId ? e : { ...e, sets: e.sets.map(s => s.id === setId ? { ...s, completed: false } : s) }));
+      return;
+    }
+    const workIndex = ex.sets.slice(0, idx).filter(s => s.type !== 'warmup').length;
+    const prevSet = set.type === 'warmup' ? undefined : lastPerfMap[ex.name]?.[workIndex];
+    const range = set.targetRepsRange ?? ex.targetRepsRange;
+    const rangeLow = range ? parseInt(range, 10) : NaN;
+    const reps = set.reps > 0 ? set.reps : (prevSet?.reps || (isNaN(rangeLow) ? 0 : rangeLow));
+    const weight = set.weight > 0 ? set.weight : (prevSet?.weight ?? 0);
+    setExercises(prev => prev.map(e => e.id !== exId ? e : {
+      ...e, sets: e.sets.map(s => s.id === setId ? { ...s, reps, weight, completed: true } : s),
+    }));
+    lightTap();
+    const isLastSetOfSession = exercises[exercises.length - 1]?.id === exId && idx === ex.sets.length - 1;
+    if (!isLastSetOfSession) startRest(ex.restSeconds ?? DEFAULT_REST_SECONDS, ex.name);
+  }, [exercises, lastPerfMap, startRest]);
+
+  const toggleWarmup = useCallback((exId: string, setId: string) => {
+    lightTap();
+    setExercises(prev => prev.map(e => e.id !== exId ? e : {
+      ...e, sets: e.sets.map(s => s.id === setId ? { ...s, type: s.type === 'warmup' ? 'normal' : 'warmup' } : s),
     }));
   }, []);
 
@@ -215,12 +327,14 @@ export default function WorkoutSessionScreen() {
     }
     setSaving(true);
     try {
+      finishedRef.current = true;
+      skipRest();
       const now = new Date().toISOString();
       const workoutObj = {
         id: uid(),
         name: workoutName,
         date: now,
-        duration: 0,
+        duration: Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000)),
         exercises,
         notes,
         programId: currentProgramId,
@@ -261,8 +375,9 @@ export default function WorkoutSessionScreen() {
       setShowSummary(true);
     } catch (e) {
       console.error('[handleFinish]', e);
+      finishedRef.current = false;
       setSaving(false);
-      navigation.goBack();
+      Alert.alert('Sauvegarde impossible', 'La séance n\'a pas pu être enregistrée. Elle reste ouverte : réessaie « Terminer ».');
     }
   };
 
@@ -275,14 +390,15 @@ export default function WorkoutSessionScreen() {
         ...(exercises.length > 0 ? [{
           text: 'Sauvegarder pour plus tard',
           onPress: async () => {
-            await saveDraftSession({ workoutName, exercises, notes, programId: currentProgramId, savedAt: new Date().toISOString() });
+            skipRest();
+            await saveDraftSession({ workoutName, exercises, notes, programId: currentProgramId, startedAt, savedAt: new Date().toISOString() });
             navigation.goBack();
           },
         }] : []),
         {
           text: 'Abandonner',
           style: 'destructive' as const,
-          onPress: async () => { await clearDraftSession(); navigation.goBack(); },
+          onPress: async () => { finishedRef.current = true; skipRest(); await clearDraftSession(); navigation.goBack(); },
         },
       ]
     );
@@ -333,7 +449,18 @@ export default function WorkoutSessionScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Durée + avancement */}
+        <View style={styles.statusBar}>
+          <Ionicons name="stopwatch-outline" size={14} color={colors.textSecondary} />
+          <Text style={styles.statusText}>{formatClock((now - new Date(startedAt).getTime()) / 1000)}</Text>
+          <Text style={styles.statusDot}>·</Text>
+          <Text style={styles.statusText}>
+            {exercises.reduce((a, e) => a + e.sets.filter(s => s.completed).length, 0)}/{exercises.reduce((a, e) => a + e.sets.length, 0)} séries
+          </Text>
+          <Text style={styles.statusHint}>Appui long sur n° = échauffement</Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {exercises.map((ex, idx) => (
             <ExerciseBlock
               key={ex.id}
@@ -345,6 +472,8 @@ export default function WorkoutSessionScreen() {
               onAddSet={addSet}
               onRemoveSet={removeSet}
               onUpdateSet={updateSet}
+              onToggleSet={toggleSet}
+              onToggleWarmup={toggleWarmup}
               onUpdatePhoto={updatePhoto}
               onViewHistory={navigateToHistory}
             />
@@ -364,8 +493,28 @@ export default function WorkoutSessionScreen() {
             multiline
             numberOfLines={3}
           />
-          <View style={{ height: 40 }} />
+          <View style={{ height: rest ? 120 : 40 }} />
         </ScrollView>
+
+        {/* Minuteur de repos */}
+        {rest && (
+          <View style={styles.restBar}>
+            <View style={[styles.restProgress, { width: `${Math.min(100, Math.max(0, ((rest.end - now) / 1000 / rest.total) * 100))}%` }]} />
+            <TouchableOpacity style={styles.restAdj} onPress={() => adjustRest(-15)}>
+              <Text style={styles.restAdjText}>−15</Text>
+            </TouchableOpacity>
+            <View style={styles.restCenter}>
+              <Text style={styles.restLabel}>REPOS</Text>
+              <Text style={styles.restTime}>{formatClock(Math.ceil((rest.end - now) / 1000))}</Text>
+            </View>
+            <TouchableOpacity style={styles.restAdj} onPress={() => adjustRest(15)}>
+              <Text style={styles.restAdjText}>+15</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.restSkip} onPress={skipRest}>
+              <Text style={styles.restSkipText}>Passer</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Summary Modal */}
@@ -508,12 +657,14 @@ interface ExerciseBlockProps {
   onUpdate: (exId: string, patch: Partial<Exercise>) => void;
   onAddSet: (exId: string) => void;
   onRemoveSet: (exId: string, setId: string) => void;
-  onUpdateSet: (exId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: string | boolean) => void;
+  onUpdateSet: (exId: string, setId: string, field: 'reps' | 'weight' | 'rir' | 'completed', value: string | boolean) => void;
+  onToggleSet: (exId: string, setId: string) => void;
+  onToggleWarmup: (exId: string, setId: string) => void;
   onUpdatePhoto: (exId: string, photoUri: string | undefined) => void;
   onViewHistory: (name: string) => void;
 }
 
-const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onUpdatePhoto, onViewHistory }: ExerciseBlockProps) {
+const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onToggleSet, onToggleWarmup, onUpdatePhoto, onViewHistory }: ExerciseBlockProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showRestPicker, setShowRestPicker] = useState(false);
   const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
@@ -620,7 +771,7 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
         <TouchableOpacity style={exStyles.restChip} onPress={() => setShowRestPicker(true)}>
           <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
           <Text style={exStyles.restChipText}>
-            {exercise.restSeconds ? formatRest(exercise.restSeconds) : 'Repos'}
+            {formatRest(exercise.restSeconds ?? DEFAULT_REST_SECONDS)}
           </Text>
         </TouchableOpacity>
       </View>
@@ -646,24 +797,34 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
         <>
           {/* Column headers */}
           <View style={exStyles.colRow}>
-            <Text style={[exStyles.colHeader, { width: 36 }]}>Série</Text>
-            <Text style={[exStyles.colHeader, { flex: 1 }]}>Reps</Text>
+            <Text style={[exStyles.colHeader, { width: 34 }]}>Série</Text>
+            <Text style={[exStyles.colHeader, { width: 64 }]}>Préc.</Text>
             <Text style={[exStyles.colHeader, { flex: 1 }]}>kg</Text>
+            <Text style={[exStyles.colHeader, { flex: 1 }]}>Reps</Text>
+            <Text style={[exStyles.colHeader, { width: 44 }]}>RIR</Text>
           </View>
 
           {/* Sets */}
-          {exercise.sets.map((set, i) => (
-            <SetRow
-              key={set.id}
-              set={set}
-              index={i}
-              targetRepsRange={set.targetRepsRange ?? exercise.targetRepsRange}
-              onToggle={() => onUpdateSet(exercise.id, set.id, 'completed', !set.completed)}
-              onChangeReps={v => onUpdateSet(exercise.id, set.id, 'reps', v)}
-              onChangeWeight={v => onUpdateSet(exercise.id, set.id, 'weight', v)}
-              onRemove={exercise.sets.length > 1 ? () => onRemoveSet(exercise.id, set.id) : undefined}
-            />
-          ))}
+          {exercise.sets.map((set, i) => {
+            const workIndex = exercise.sets.slice(0, i).filter(s => s.type !== 'warmup').length;
+            const workNumber = workIndex + 1;
+            const prev = set.type === 'warmup' ? undefined : lastPerf?.[workIndex];
+            return (
+              <SetRow
+                key={set.id}
+                set={set}
+                label={set.type === 'warmup' ? 'É' : String(workNumber)}
+                prev={prev}
+                targetRepsRange={set.targetRepsRange ?? exercise.targetRepsRange}
+                onToggle={() => onToggleSet(exercise.id, set.id)}
+                onLongPress={() => onToggleWarmup(exercise.id, set.id)}
+                onChangeReps={v => onUpdateSet(exercise.id, set.id, 'reps', v)}
+                onChangeWeight={v => onUpdateSet(exercise.id, set.id, 'weight', v)}
+                onChangeRir={v => onUpdateSet(exercise.id, set.id, 'rir', v)}
+                onRemove={exercise.sets.length > 1 ? () => onRemoveSet(exercise.id, set.id) : undefined}
+              />
+            );
+          })}
 
           {/* Footer */}
           <View style={exStyles.footer}>
@@ -685,47 +846,73 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
 
 interface SetRowProps {
   set: ExerciseSet;
-  index: number;
+  label: string;
+  prev?: ExerciseSet;
   targetRepsRange?: string;
   onToggle: () => void;
+  onLongPress: () => void;
   onChangeReps: (v: string) => void;
   onChangeWeight: (v: string) => void;
+  onChangeRir: (v: string) => void;
   onRemove?: () => void;
 }
 
-function SetRow({ set, index, targetRepsRange, onToggle, onChangeReps, onChangeWeight, onRemove }: SetRowProps) {
+function SetRow({ set, label, prev, targetRepsRange, onToggle, onLongPress, onChangeReps, onChangeWeight, onChangeRir, onRemove }: SetRowProps) {
+  const warm = set.type === 'warmup';
+  const muted = set.completed ? colors.success + '80' : colors.textMuted;
   return (
     <View style={[setStyles.row, set.completed && setStyles.rowDone]}>
-      <TouchableOpacity style={[setStyles.circle, set.completed && setStyles.circleDone]} onPress={onToggle}>
+      <TouchableOpacity
+        style={[setStyles.circle, warm && setStyles.circleWarm, set.completed && setStyles.circleDone]}
+        onPress={onToggle}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+      >
         {set.completed
           ? <Ionicons name="checkmark" size={16} color="#fff" />
-          : <Text style={setStyles.circleNum}>{index + 1}</Text>
+          : <Text style={[setStyles.circleNum, warm && { color: colors.warning }]}>{label}</Text>
         }
       </TouchableOpacity>
 
-      <TextInput
-        style={[setStyles.input, set.completed && setStyles.inputDone]}
-        value={set.reps > 0 ? String(set.reps) : ''}
-        onChangeText={onChangeReps}
-        keyboardType="number-pad"
-        placeholder={targetRepsRange ?? '0'}
-        placeholderTextColor={set.completed ? colors.success + '80' : colors.textMuted}
-        editable={!set.completed}
-      />
+      <Text style={setStyles.prev} numberOfLines={1}>
+        {prev ? `${prev.weight}×${prev.reps}` : '—'}
+      </Text>
+
       <TextInput
         style={[setStyles.input, set.completed && setStyles.inputDone]}
         value={set.weight > 0 ? String(set.weight) : ''}
         onChangeText={onChangeWeight}
         keyboardType="decimal-pad"
-        placeholder="kg"
-        placeholderTextColor={set.completed ? colors.success + '80' : colors.textMuted}
+        placeholder={prev ? String(prev.weight) : 'kg'}
+        placeholderTextColor={muted}
         editable={!set.completed}
+        selectTextOnFocus
       />
-      {onRemove && (
+      <TextInput
+        style={[setStyles.input, set.completed && setStyles.inputDone]}
+        value={set.reps > 0 ? String(set.reps) : ''}
+        onChangeText={onChangeReps}
+        keyboardType="number-pad"
+        placeholder={prev ? String(prev.reps) : (targetRepsRange ?? '0')}
+        placeholderTextColor={muted}
+        editable={!set.completed}
+        selectTextOnFocus
+      />
+      <TextInput
+        style={[setStyles.input, setStyles.inputRir, set.completed && setStyles.inputDone]}
+        value={set.rir !== undefined ? String(set.rir) : ''}
+        onChangeText={onChangeRir}
+        keyboardType="number-pad"
+        placeholder="–"
+        placeholderTextColor={muted}
+        editable={!set.completed && !warm}
+        maxLength={2}
+      />
+      {onRemove ? (
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="remove-circle-outline" size={18} color={colors.error} />
         </TouchableOpacity>
-      )}
+      ) : <View style={{ width: 18 }} />}
     </View>
   );
 }
@@ -1148,7 +1335,7 @@ const setStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '55',
@@ -1163,9 +1350,13 @@ const setStyles = StyleSheet.create({
     alignItems: 'center',
   },
   circleDone: { backgroundColor: colors.success, borderColor: colors.success },
+  circleWarm: { borderColor: colors.warning, borderStyle: 'dashed' },
+  prev: { width: 64, flexShrink: 0, ...typography.caption, color: colors.textMuted, textAlign: 'center' },
+  inputRir: { flexGrow: 0, flexShrink: 0, flexBasis: 44, width: 44, paddingHorizontal: 2 },
   circleNum: { ...typography.caption, color: colors.textSecondary },
   input: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: colors.inputBg,
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,
@@ -1388,4 +1579,34 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     minHeight: 72,
   },
+  statusBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: spacing.md, paddingVertical: 6,
+    backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  statusText: { ...typography.caption, color: colors.textSecondary },
+  statusDot: { ...typography.caption, color: colors.textMuted },
+  statusHint: { ...typography.tiny, color: colors.textMuted, marginLeft: 'auto' },
+  restBar: {
+    position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    borderWidth: 1, borderColor: colors.primary,
+    paddingHorizontal: spacing.md, paddingVertical: 10, overflow: 'hidden',
+    ...shadows.md,
+  },
+  restProgress: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.primaryMuted },
+  restAdj: {
+    width: 48, height: 40, borderRadius: borderRadius.md,
+    backgroundColor: colors.inputBg, justifyContent: 'center', alignItems: 'center',
+  },
+  restAdjText: { ...typography.bodyBold, color: colors.text },
+  restCenter: { flex: 1, alignItems: 'center' },
+  restLabel: { ...typography.label, color: colors.primaryLight },
+  restTime: { ...typography.h2, color: colors.text },
+  restSkip: {
+    paddingHorizontal: 14, height: 40, borderRadius: borderRadius.md,
+    backgroundColor: colors.primary, justifyContent: 'center',
+  },
+  restSkipText: { ...typography.bodyBold, color: colors.onPrimary },
 });

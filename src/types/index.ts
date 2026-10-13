@@ -6,6 +6,8 @@ export interface ExerciseSet {
   weight: number; // kg
   completed: boolean;
   targetRepsRange?: string;
+  rir?: number;               // répétitions en réserve (0 = échec)
+  type?: 'normal' | 'warmup'; // échauffement = exclu des records et du pré-remplissage
 }
 
 export interface Exercise {
@@ -26,6 +28,7 @@ export interface DraftSession {
   notes: string;
   programId?: string;
   savedAt: string;
+  startedAt?: string;
 }
 
 export interface UserExercise {
