@@ -15,6 +15,7 @@ import { syncWorkout } from '../lib/workoutSync';
 import { DEFAULT_REST_SECONDS, scheduleRestEnd, cancelRestEnd, restEndFeedback, lightTap, formatClock } from '../lib/restTimer';
 import { uid, formatDateLong } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, UserExercise } from '../types';
+import { EXERCISE_GUIDE } from '../data/exerciseGuide';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type PickerItem = ExerciseTemplate & { photoUri?: string };
@@ -319,6 +320,10 @@ export default function WorkoutSessionScreen() {
     navigation.navigate('ExerciseHistory', { exerciseName: name });
   }, [navigation]);
 
+  const navigateToGuide = useCallback((name: string) => {
+    navigation.navigate('ExerciseGuide', { exerciseName: name });
+  }, [navigation]);
+
   const handleFinish = async () => {
     if (saving) return;
     if (exercises.length === 0) {
@@ -476,6 +481,7 @@ export default function WorkoutSessionScreen() {
               onToggleWarmup={toggleWarmup}
               onUpdatePhoto={updatePhoto}
               onViewHistory={navigateToHistory}
+              onViewGuide={navigateToGuide}
             />
           ))}
 
@@ -662,9 +668,10 @@ interface ExerciseBlockProps {
   onToggleWarmup: (exId: string, setId: string) => void;
   onUpdatePhoto: (exId: string, photoUri: string | undefined) => void;
   onViewHistory: (name: string) => void;
+  onViewGuide: (name: string) => void;
 }
 
-const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onToggleSet, onToggleWarmup, onUpdatePhoto, onViewHistory }: ExerciseBlockProps) {
+const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, onRemove, onUpdate, onAddSet, onRemoveSet, onUpdateSet, onToggleSet, onToggleWarmup, onUpdatePhoto, onViewHistory, onViewGuide }: ExerciseBlockProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showRestPicker, setShowRestPicker] = useState(false);
   const tagColor = MUSCLE_GROUP_COLORS[exercise.muscleGroup ?? ''] ?? colors.primary;
@@ -733,6 +740,11 @@ const ExerciseBlock = React.memo(function ExerciseBlock({ exercise, lastPerf, on
           >
             <Ionicons name={hasVideo ? 'videocam' : 'videocam-outline'} size={20} color={hasVideo ? colors.info : colors.textMuted} />
           </TouchableOpacity>
+          {EXERCISE_GUIDE[exercise.name] && (
+            <TouchableOpacity onPress={() => onViewGuide(exercise.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="book-outline" size={18} color={colors.primaryLight} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => onViewHistory(exercise.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="stats-chart-outline" size={18} color={colors.primary} />
           </TouchableOpacity>

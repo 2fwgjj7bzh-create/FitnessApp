@@ -14,6 +14,7 @@ import WorkoutSessionScreen from '../screens/WorkoutSessionScreen';
 import CreateProgramScreen from '../screens/CreateProgramScreen';
 import ExerciseHistoryScreen from '../screens/ExerciseHistoryScreen';
 import WeeklyScheduleScreen from '../screens/WeeklyScheduleScreen';
+import ExerciseGuideScreen from '../screens/ExerciseGuideScreen';
 import StatsScreen from '../screens/StatsScreen';
 import NutritionScreen from '../screens/NutritionScreen';
 import BodyListScreen from '../screens/BodyListScreen';
@@ -39,6 +40,7 @@ function WorkoutNavigator() {
       <WorkoutStack.Screen name="CreateProgram"   component={CreateProgramScreen} />
       <WorkoutStack.Screen name="ExerciseHistory" component={ExerciseHistoryScreen} />
       <WorkoutStack.Screen name="WeeklySchedule"  component={WeeklyScheduleScreen} />
+      <WorkoutStack.Screen name="ExerciseGuide"   component={ExerciseGuideScreen} />
     </WorkoutStack.Navigator>
   );
 }

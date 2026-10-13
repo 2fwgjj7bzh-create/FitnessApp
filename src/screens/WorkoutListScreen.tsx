@@ -125,6 +125,9 @@ export default function WorkoutListScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Entraînements</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.calendarBtn} onPress={() => navigation.navigate('ExerciseGuide', {})}>
+            <Ionicons name="book-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.calendarBtn} onPress={() => navigation.navigate('WeeklySchedule')}>
             <Ionicons name="calendar-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
@@ -713,8 +716,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm,
   },
-  title: { ...typography.h1, color: colors.text },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  title: { ...typography.h1, fontSize: 38, color: colors.text, flexShrink: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   calendarBtn: {
     width: 40, height: 40, borderRadius: borderRadius.round,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,

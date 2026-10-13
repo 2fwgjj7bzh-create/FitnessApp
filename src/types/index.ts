@@ -195,6 +195,7 @@ export type WorkoutStackParamList = {
   CreateProgram: { programId?: string };
   ExerciseHistory: { exerciseName: string };
   WeeklySchedule: undefined;
+  ExerciseGuide: { exerciseName?: string } | undefined;
 };
 
 export type BodyStackParamList = {
