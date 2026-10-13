@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { useAuth } from '../lib/authContext';
+import { exportBackup, pickBackup, restoreBackup, describeBackup } from '../lib/backup';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -16,28 +17,77 @@ export default function ProfileScreen() {
   }
 
   const email = user?.email ?? '—';
-  const avatarLetter = email !== '—' ? email[0].toUpperCase() : '?';
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+
+  const notify = (title: string, msg: string) => {
+    if (Platform.OS === 'web') window.alert(`${title}\n\n${msg}`); else Alert.alert(title, msg);
+  };
+
+  async function handleExport() {
+    setBusy('export');
+    try {
+      const summary = await exportBackup();
+      notify('Sauvegarde prête', `${summary}\n\nEnregistre le fichier dans Fichiers ou iCloud Drive pour le garder en sécurité.`);
+    } catch (e: any) {
+      notify('Export impossible', e?.message ?? String(e));
+    } finally { setBusy(null); }
+  }
+
+  async function handleImport() {
+    setBusy('import');
+    try {
+      const backup = await pickBackup();
+      if (!backup) return;
+      const go = async () => {
+        await restoreBackup(backup);
+        notify('Données restaurées', 'Change d\'onglet (ou relance l\'appli) pour voir tes données.');
+      };
+      const msg = `Sauvegarde du ${backup.exportedAt.slice(0, 10)} : ${describeBackup(backup)}.\n\nElle REMPLACE toutes les données actuelles de l'appli.`;
+      if (Platform.OS === 'web') { if (window.confirm(msg)) await go(); }
+      else Alert.alert('Restaurer cette sauvegarde ?', msg, [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Restaurer', style: 'destructive', onPress: go },
+      ]);
+    } catch (e: any) {
+      notify('Import impossible', e?.message ?? String(e));
+    } finally { setBusy(null); }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Profil</Text>
 
-        {/* Avatar */}
+        {/* Logo */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarLetter}>{avatarLetter}</Text>
-          </View>
-          <Text style={styles.email}>{email}</Text>
+          <Image source={require('../../assets/logo-badge.png')} style={styles.logo} />
+          {user && <Text style={styles.email}>{email}</Text>}
         </View>
 
         {/* Section compte */}
         <Text style={styles.sectionLabel}>COMPTE</Text>
         <View style={styles.card}>
-          <SettingsRow icon="mail-outline" label="Email" value={email} />
-          <View style={styles.divider} />
-          <SettingsRow icon="shield-checkmark-outline" label="Statut" value="Connecté" valueColor={colors.success} />
+          {user ? (
+            <>
+              <SettingsRow icon="mail-outline" label="Email" value={email} />
+              <View style={styles.divider} />
+              <SettingsRow icon="shield-checkmark-outline" label="Statut" value="Connecté" valueColor={colors.success} />
+            </>
+          ) : (
+            <SettingsRow icon="phone-portrait-outline" label="Mode" value="Local (données sur ce téléphone)" />
+          )}
         </View>
+
+        {/* Données */}
+        <Text style={styles.sectionLabel}>MES DONNÉES</Text>
+        <View style={styles.card}>
+          <SettingsRow icon="cloud-upload-outline" label="Exporter une sauvegarde" value={busy === 'export' ? '…' : 'JSON'} onPress={busy ? undefined : handleExport} />
+          <View style={styles.divider} />
+          <SettingsRow icon="cloud-download-outline" label="Restaurer une sauvegarde" value={busy === 'import' ? '…' : ''} onPress={busy ? undefined : handleImport} />
+        </View>
+        <Text style={styles.hint}>
+          Tes données sont stockées sur ce téléphone. Exporte une sauvegarde régulièrement (Fichiers / iCloud Drive) : si l'appli est supprimée, c'est elle qui te permettra de tout récupérer.
+        </Text>
 
         {/* Section app */}
         <Text style={styles.sectionLabel}>APPLICATION</Text>
@@ -48,10 +98,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Déconnexion */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={18} color={colors.error} />
-          <Text style={styles.signOutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+        {user && (
+          <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={18} color={colors.error} />
+            <Text style={styles.signOutText}>Se déconnecter</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -59,25 +111,29 @@ export default function ProfileScreen() {
   );
 }
 
-function SettingsRow({ icon, label, value, valueColor }: {
-  icon: string; label: string; value: string; valueColor?: string;
+export function SettingsRow({ icon, label, value, valueColor, onPress }: {
+  icon: string; label: string; value: string; valueColor?: string; onPress?: () => void;
 }) {
-  return (
-    <View style={rowStyles.row}>
+  const content = (
+    <>
       <View style={rowStyles.iconWrap}>
-        <Ionicons name={icon as any} size={18} color={colors.primary} />
+        <Ionicons name={icon as any} size={18} color={colors.primaryLight} />
       </View>
       <Text style={rowStyles.label}>{label}</Text>
-      <Text style={[rowStyles.value, valueColor ? { color: valueColor } : {}]}>{value}</Text>
-    </View>
+      <Text style={[rowStyles.value, valueColor ? { color: valueColor } : {}]} numberOfLines={1}>{value}</Text>
+      {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+    </>
   );
+  return onPress
+    ? <TouchableOpacity style={rowStyles.row} onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>
+    : <View style={rowStyles.row}>{content}</View>;
 }
 
 const rowStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: spacing.md, gap: spacing.md },
   iconWrap: { width: 32, height: 32, borderRadius: borderRadius.sm, backgroundColor: colors.primaryMuted, justifyContent: 'center', alignItems: 'center' },
   label: { ...typography.body, color: colors.text, flex: 1 },
-  value: { ...typography.caption, color: colors.textMuted },
+  value: { ...typography.caption, color: colors.textMuted, flexShrink: 1, textAlign: 'right' },
 });
 
 const styles = StyleSheet.create({
@@ -92,6 +148,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: spacing.sm,
   },
   avatarLetter: { fontSize: 32, fontWeight: '700' as const, color: colors.primary },
+  logo: { width: 96, height: 96, borderRadius: 48, marginBottom: spacing.sm },
+  hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm, lineHeight: 18 },
   email: { ...typography.body, color: colors.textSecondary },
   sectionLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.lg },
   card: {
