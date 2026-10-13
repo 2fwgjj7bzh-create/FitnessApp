@@ -8,8 +8,13 @@ export function uid(): string {
 
 // ─── Dates ────────────────────────────────────────────────────────────────────
 
+/** Date locale AAAA-MM-JJ (et non UTC : entre minuit et 2h en France, l'UTC donnait la veille). */
+export function localDateStr(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function today(): string {
-  return new Date().toISOString().split('T')[0];
+  return localDateStr();
 }
 
 export function formatDate(dateStr: string): string {

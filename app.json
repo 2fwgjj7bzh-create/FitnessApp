@@ -42,7 +42,21 @@
           "photosPermission": "FitnessApp a besoin d'accéder à vos photos pour les bilans."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "L'appli lit tes pas, ton énergie active et tes entraînements pour calculer ton NEAT et ajuster tes besoins caloriques.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#C8102E"
+        }
+      ]
     ],
     "extra": {
       "eas": {

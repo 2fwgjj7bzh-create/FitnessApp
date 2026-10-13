@@ -1,4 +1,5 @@
 import { Gender, ActivityLevel, FitnessGoal, UserGoals } from '../types';
+import { calcBMR as calcBMRShared } from './metabolism';
 
 const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -14,14 +15,14 @@ const GOAL_KCAL_DELTA: Record<FitnessGoal, number> = {
   gain: 300,
 };
 
+/** Mifflin-St Jeor — même moteur que l'onglet Métabolisme (utils/metabolism). */
 export function calcBMR(
   weightKg: number,
   heightCm: number,
   age: number,
   gender: Gender,
 ): number {
-  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
-  return gender === 'male' ? base + 5 : base - 161;
+  return calcBMRShared('mifflin', weightKg, heightCm, age, gender, 0);
 }
 
 export function calcGoalsFromProfile(params: {

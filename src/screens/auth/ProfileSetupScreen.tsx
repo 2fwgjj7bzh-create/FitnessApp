@@ -15,6 +15,7 @@ import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Gender, FitnessGoal, ActivityLevel, UserGoals } from '../../types';
 import { saveProfile, saveGoals } from '../../storage';
 import { calcGoalsFromProfile } from '../../utils/macroCalculator';
+import { localDateStr } from '../../utils/helpers';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/authContext';
 
@@ -161,7 +162,7 @@ export default function ProfileSetupScreen() {
         if (form.weightKg) {
           await db.from('body_measurements').upsert({
             user_id: user.id,
-            date: new Date().toISOString().split('T')[0],
+            date: localDateStr(),
             poids_corps: form.weightKg,
           });
         }

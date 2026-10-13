@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { useAuth } from '../lib/authContext';
 import { exportBackup, pickBackup, restoreBackup, describeBackup } from '../lib/backup';
+import { healthStatus, requestHealthAccess } from '../lib/health';
+import { syncNeatFromHealth } from '../lib/neat';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -22,6 +24,25 @@ export default function ProfileScreen() {
   const notify = (title: string, msg: string) => {
     if (Platform.OS === 'web') window.alert(`${title}\n\n${msg}`); else Alert.alert(title, msg);
   };
+
+  const hStatus = healthStatus();
+  const healthLabel = hStatus === 'available' ? 'Disponible'
+    : hStatus === 'expo-go' ? 'Indisponible dans Expo Go'
+    : hStatus === 'not-ios' ? 'iPhone uniquement' : 'Indisponible';
+
+  async function handleHealth() {
+    if (hStatus !== 'available') {
+      notify('Apple Santé', hStatus === 'expo-go'
+        ? "Apple Santé ne fonctionne pas dans Expo Go. Il faut installer la version compilée de l'appli (EAS build). En attendant, saisis tes pas depuis l'accueil (carte NEAT)."
+        : "Apple Santé n'est pas disponible sur cet appareil. Tu peux saisir tes pas depuis l'accueil (carte NEAT).");
+      return;
+    }
+    const ok = await requestHealthAccess();
+    const n = ok ? await syncNeatFromHealth(14).catch(() => 0) : 0;
+    notify('Apple Santé', ok
+      ? `${n} jour${n > 1 ? 's' : ''} importé${n > 1 ? 's' : ''}. Si rien n'apparaît, vérifie dans Santé › Partage › Apps que les pas et l'énergie active sont autorisés.`
+      : "Accès refusé. Tu peux l'autoriser dans Réglages › Santé › Accès aux données.");
+  }
 
   async function handleExport() {
     setBusy('export');
@@ -76,6 +97,13 @@ export default function ProfileScreen() {
           ) : (
             <SettingsRow icon="phone-portrait-outline" label="Mode" value="Local (données sur ce téléphone)" />
           )}
+        </View>
+
+        {/* Santé */}
+        <Text style={styles.sectionLabel}>APPLE SANTÉ (NEAT)</Text>
+        <View style={styles.card}>
+          <SettingsRow icon="heart-outline" label="Connexion Santé" value={healthLabel}
+            valueColor={hStatus === 'available' ? colors.success : undefined} onPress={handleHealth} />
         </View>
 
         {/* Données */}

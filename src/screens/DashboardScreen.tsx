@@ -13,6 +13,7 @@ import {
   getWeeklyTemplate, getPrograms, getProfile, saveProfile,
 } from '../storage';
 import { calcDayNutrition } from '../utils/helpers';
+import NeatCard from '../components/NeatCard';
 import { today, formatDate } from '../utils/helpers';
 import { Workout, WeeklyCheckin, UserGoals, RootTabParamList, WorkoutStackParamList, WorkoutProgram, UserProfile } from '../types';
 
@@ -101,7 +102,7 @@ export default function DashboardScreen() {
   };
 
   const handleSaveName = async () => {
-    const prof: UserProfile = { firstName: nameInput.trim() };
+    const prof: UserProfile = { ...profile, firstName: nameInput.trim() };
     setProfile(prof);
     await saveProfile(prof);
     setShowNameModal(false);
@@ -227,6 +228,9 @@ export default function DashboardScreen() {
             </View>
           )}
         </TouchableOpacity>
+
+        {/* NEAT */}
+        <NeatCard onGoalsUpdated={load} />
 
         {/* Latest check-in */}
         {latestCheckin && (

@@ -9,26 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
 import { getNutritionDay, saveNutritionDay, getGoals, saveGoals } from '../storage';
-import { uid } from '../utils/helpers';
+import { uid, localDateStr } from '../utils/helpers';
 import { NutritionDay, Food, MealType, UserGoals } from '../types';
 import { FOOD_DB, FOOD_CATEGORIES, FoodEntry } from '../data/foodDatabase';
+import { DEFAULT_GOALS, computeGoals, calcBMR, FORMULAS, ACTIVITY_LEVELS, MEASURED_ACTIVITY } from '../utils/metabolism';
+import { getMetabolismSettings, saveMetabolismSettings, computeMeasured, MeasuredResult, MIN_DAYS_FOR_MEASURED } from '../lib/metabolismSettings';
 
 const MEAL_TYPES: MealType[] = ['Petit-déjeuner', 'Déjeuner', 'Dîner', 'Collation'];
 const MEAL_ICONS: Record<MealType, string> = {
   'Petit-déjeuner': '☀️', 'Déjeuner': '🌿', 'Dîner': '🌙', 'Collation': '⚡',
 };
-
-const DEFAULT_GOALS: UserGoals = {
-  calorieGoal: 2000, proteinGoal: 160, carbsGoal: 200, fatGoal: 70,
-  workoutsPerWeek: 4, bodyWeight: 80, proteinMult: 2.2, fatMult: 0.4,
-};
-
-function computeGoals(weight: number, kcal: number, pm: number, fm: number): UserGoals {
-  const protein = Math.round(weight * pm);
-  const fat = Math.round(weight * fm);
-  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
-  return { ...DEFAULT_GOALS, bodyWeight: weight, calorieGoal: kcal, proteinGoal: protein, carbsGoal: carbs, fatGoal: fat, proteinMult: pm, fatMult: fm };
-}
 
 function sumMacros(foods: Food[]) {
   return foods.reduce(
@@ -42,50 +32,16 @@ function sumMacros(foods: Food[]) {
   );
 }
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() { return localDateStr(); }
 function shiftDate(date: string, delta: number): string {
   const d = new Date(date + 'T12:00:00');
   d.setDate(d.getDate() + delta);
-  return d.toISOString().split('T')[0];
+  return localDateStr(d);
 }
 function formatDateLabel(dateStr: string): string {
   if (dateStr === todayStr()) return "Aujourd'hui";
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-// ─── BMR Formulas ─────────────────────────────────────────────────────────────
-
-const FORMULAS = [
-  { id: 'mifflin', name: 'Mifflin-St Jeor', desc: 'Recommandée, la plus précise', requiresBf: false },
-  { id: 'harris', name: 'Harris-Benedict', desc: 'Formule révisée classique', requiresBf: false },
-  { id: 'katch', name: 'Katch-McArdle', desc: 'Utilise le % de masse grasse', requiresBf: true },
-];
-
-const ACTIVITY_LEVELS = [
-  { label: 'Sédentaire', desc: 'Peu ou pas d\'exercice', mult: 1.2 },
-  { label: 'Légèrement actif', desc: '1–3 séances/semaine', mult: 1.375 },
-  { label: 'Modérément actif', desc: '3–5 séances/semaine', mult: 1.55 },
-  { label: 'Très actif', desc: '6–7 séances/semaine', mult: 1.725 },
-  { label: 'Athlète', desc: '2× par jour, sport intense', mult: 1.9 },
-];
-
-function calcBMR(formula: string, weight: number, height: number, age: number, sex: 'male' | 'female', bf: number): number {
-  switch (formula) {
-    case 'mifflin':
-      return sex === 'male'
-        ? 10 * weight + 6.25 * height - 5 * age + 5
-        : 10 * weight + 6.25 * height - 5 * age - 161;
-    case 'harris':
-      return sex === 'male'
-        ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age
-        : 447.593 + 9.247 * weight + 3.098 * height - 4.330 * age;
-    case 'katch': {
-      const lbm = weight * (1 - bf / 100);
-      return 370 + 21.6 * lbm;
-    }
-    default: return 0;
-  }
 }
 
 // ─── Custom Slider ────────────────────────────────────────────────────────────
@@ -281,6 +237,31 @@ export default function NutritionScreen() {
   const [bmrFormula, setBmrFormula] = useState('mifflin');
   const [bmrActivity, setBmrActivity] = useState(1.55);
   const [bmrAdjust, setBmrAdjust] = useState(0); // -100 to +100 %
+  const [autoUpdate, setAutoUpdate] = useState(true);
+  const [watchDuringWorkouts, setWatchDuringWorkouts] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [measured, setMeasured] = useState<MeasuredResult | null>(null);
+
+  // Réglages du métabolisme : chargés une fois, puis sauvegardés à chaque modification
+  useEffect(() => {
+    getMetabolismSettings().then(m => {
+      setBmrAge(m.age); setBmrHeight(m.height); setBmrSex(m.sex); setBmrBf(m.bf);
+      setBmrFormula(m.formula); setBmrActivity(m.activity); setBmrAdjust(m.adjust);
+      setAutoUpdate(m.autoUpdate); setWatchDuringWorkouts(m.watchDuringWorkouts);
+      setSettingsLoaded(true);
+    });
+  }, []);
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const settings = {
+      age: bmrAge, height: bmrHeight, sex: bmrSex, bf: bmrBf, formula: bmrFormula,
+      activity: bmrActivity, adjust: bmrAdjust, autoUpdate, watchDuringWorkouts,
+    };
+    saveMetabolismSettings(settings);
+    if (bmrActivity === MEASURED_ACTIVITY) {
+      computeMeasured(settings, parseFloat(editWeight) || 80).then(setMeasured).catch(() => setMeasured(null));
+    }
+  }, [settingsLoaded, bmrAge, bmrHeight, bmrSex, bmrBf, bmrFormula, bmrActivity, bmrAdjust, autoUpdate, watchDuringWorkouts, editWeight, tab]);
 
   const load = useCallback(async () => {
     const [d, g] = await Promise.all([getNutritionDay(date), getGoals()]);
@@ -651,6 +632,9 @@ export default function NutritionScreen() {
             formula={bmrFormula} setFormula={setBmrFormula}
             activity={bmrActivity} setActivity={setBmrActivity}
             adjust={bmrAdjust} setAdjust={setBmrAdjust}
+            measured={measured}
+            autoUpdate={autoUpdate} setAutoUpdate={setAutoUpdate}
+            watchDuringWorkouts={watchDuringWorkouts} setWatchDuringWorkouts={setWatchDuringWorkouts}
             proteinMult={editProteinMult}
             fatMult={editFatMult}
             onApply={applyBmrToGoals}
@@ -769,19 +753,23 @@ interface BmrTabProps {
   formula: string; setFormula: (v: string) => void;
   activity: number; setActivity: (v: number) => void;
   adjust: number; setAdjust: (v: number) => void;
+  measured: MeasuredResult | null;
+  autoUpdate: boolean; setAutoUpdate: (v: boolean) => void;
+  watchDuringWorkouts: boolean; setWatchDuringWorkouts: (v: boolean) => void;
   proteinMult: number;
   fatMult: number;
   onApply: (kcal: number) => void;
 }
 
-function BmrTab({ age, setAge, height, setHeight, sex, setSex, weight, setWeight, bf, setBf, formula, setFormula, activity, setActivity, adjust, setAdjust, proteinMult, fatMult, onApply }: BmrTabProps) {
+function BmrTab({ age, setAge, height, setHeight, sex, setSex, weight, setWeight, bf, setBf, formula, setFormula, activity, setActivity, adjust, setAdjust, measured, autoUpdate, setAutoUpdate, watchDuringWorkouts, setWatchDuringWorkouts, proteinMult, fatMult, onApply }: BmrTabProps) {
   const w = parseFloat(weight) || 80;
   const h = parseFloat(height) || 175;
   const a = parseInt(age) || 25;
   const b = parseFloat(bf) || 15;
 
   const bmr = Math.round(calcBMR(formula, w, h, a, sex, b));
-  const tdee = Math.round(bmr * activity);
+  const isMeasured = activity === MEASURED_ACTIVITY;
+  const tdee = isMeasured ? (measured?.tdee ?? bmr) : Math.round(bmr * activity);
   const adjusted = Math.round(tdee * (1 + adjust / 100));
 
   const protein = Math.round(w * proteinMult);
@@ -874,7 +862,68 @@ function BmrTab({ age, setAge, height, setHeight, sex, setSex, weight, setWeight
             <Text style={[bmrStyles.actMult, activity === al.mult && { color: colors.primary }]}>×{al.mult}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[bmrStyles.actBtn, isMeasured && bmrStyles.actBtnActive]}
+          onPress={() => setActivity(MEASURED_ACTIVITY)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[bmrStyles.actLabel, isMeasured && { color: colors.primary }]}>Mesuré — NEAT réel</Text>
+            <Text style={bmrStyles.actDesc}>Pas / énergie active (Apple Santé) + tes séances, moyenne 7 jours</Text>
+          </View>
+          <Ionicons name="pulse" size={18} color={isMeasured ? colors.primary : colors.textMuted} />
+        </TouchableOpacity>
       </View>
+
+      {isMeasured && (
+        <View style={bmrStyles.card}>
+          <Text style={bmrStyles.cardTitle}>📡 Dépense mesurée (7 derniers jours complets)</Text>
+          {!measured ? (
+            <Text style={bmrStyles.actDesc}>Calcul en cours…</Text>
+          ) : (
+            <>
+              {!measured.usable && (
+                <View style={bmrStyles.warnBox}>
+                  <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+                  <Text style={bmrStyles.warnText}>
+                    {measured.week.daysWithData} jour{measured.week.daysWithData > 1 ? 's' : ''} de NEAT sur 7 : il en faut au moins {MIN_DAYS_FOR_MEASURED}.
+                    Connecte Apple Santé ou saisis tes pas depuis l'accueil. En attendant, garde un niveau d'activité fixe.
+                  </Text>
+                </View>
+              )}
+              {[
+                { k: 'Métabolisme de base', v: measured.bmr, d: FORMULAS.find(f => f.id === formula)?.name ?? '' },
+                { k: 'NEAT (moyenne/jour)', v: measured.neat, d: measured.week.stepsAvg ? `${Math.round(measured.week.stepsAvg).toLocaleString('fr')} pas/jour en moyenne` : 'aucune donnée' },
+                { k: 'Séances (moyenne/jour)', v: measured.eat, d: 'Santé, sinon estimation depuis tes séances' },
+                { k: 'Digestion (TEF ≈ 10 %)', v: measured.tef, d: 'effet thermique des aliments' },
+              ].map(row => (
+                <View key={row.k} style={bmrStyles.measRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={bmrStyles.measLabel}>{row.k}</Text>
+                    <Text style={bmrStyles.actDesc}>{row.d}</Text>
+                  </View>
+                  <Text style={bmrStyles.measValue}>{row.v} kcal</Text>
+                </View>
+              ))}
+              <View style={[bmrStyles.measRow, { borderBottomWidth: 0 }]}>
+                <Text style={[bmrStyles.measLabel, { flex: 1, color: colors.text }]}>Dépense totale (DET)</Text>
+                <Text style={[bmrStyles.measValue, { color: colors.primaryLight }]}>{measured.tdee} kcal</Text>
+              </View>
+              <Text style={bmrStyles.actDesc}>
+                Équivaut à un multiplicateur de ×{(measured.tdee / Math.max(1, measured.bmr)).toFixed(2)} sur ton métabolisme de base.
+              </Text>
+            </>
+          )}
+
+          <TouchableOpacity style={bmrStyles.toggleRow} onPress={() => setAutoUpdate(!autoUpdate)}>
+            <Ionicons name={autoUpdate ? 'checkbox' : 'square-outline'} size={20} color={autoUpdate ? colors.primary : colors.textMuted} />
+            <Text style={bmrStyles.toggleText}>Mettre à jour mes objectifs automatiquement chaque jour</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={bmrStyles.toggleRow} onPress={() => setWatchDuringWorkouts(!watchDuringWorkouts)}>
+            <Ionicons name={watchDuringWorkouts ? 'checkbox' : 'square-outline'} size={20} color={watchDuringWorkouts ? colors.primary : colors.textMuted} />
+            <Text style={bmrStyles.toggleText}>Je porte une Apple Watch pendant mes séances</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Résultats intermédiaires */}
       <View style={bmrStyles.resultsCard}>
@@ -947,6 +996,19 @@ function ResultBox({ label, value, unit, color }: { label: string; value: string
 }
 
 const bmrStyles = StyleSheet.create({
+  warnBox: {
+    flexDirection: 'row', gap: 8, alignItems: 'flex-start',
+    backgroundColor: colors.warning + '18', borderRadius: borderRadius.md, padding: spacing.sm, marginBottom: spacing.sm,
+  },
+  warnText: { ...typography.caption, color: colors.text, flex: 1 },
+  measRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: colors.borderLight,
+  },
+  measLabel: { ...typography.body, color: colors.textSecondary },
+  measValue: { ...typography.bodyBold, color: colors.text },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md },
+  toggleText: { ...typography.caption, color: colors.textSecondary, flex: 1 },
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
     marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
