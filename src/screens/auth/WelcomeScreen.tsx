@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -54,9 +55,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         <View style={styles.content}>
           {/* Logo + titre */}
           <View style={styles.hero}>
-            <View style={styles.logoMark}>
-              <Text style={styles.logoSymbol}>◆</Text>
-            </View>
+            <Image source={require('../../../assets/logo-badge.png')} style={styles.logoImg} />
             <Text style={styles.appName}>IRONLOG</Text>
             <Text style={styles.tagline}>
               Programme. Exécute.{'\n'}Progresse.
@@ -142,7 +141,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#0A0A0A" />
+              ? <ActivityIndicator color={colors.onPrimary} />
               : <Text style={styles.primaryBtnText}>{mode === 'login' ? 'SE CONNECTER' : 'CRÉER MON COMPTE'}</Text>
             }
           </TouchableOpacity>
@@ -181,9 +180,10 @@ const styles = StyleSheet.create({
     width: 52, height: 52, backgroundColor: colors.primary,
     borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg,
   },
-  logoSymbol: { color: '#0A0A0A', fontSize: 24, fontWeight: '900' as const },
+  logoImg: { width: 96, height: 96, borderRadius: 48, marginBottom: spacing.lg },
+  logoSymbol: { color: colors.onPrimary, fontSize: 24, fontWeight: '900' as const },
   appName: { ...typography.h1, color: colors.text, letterSpacing: 8, marginBottom: spacing.md },
-  tagline: { ...typography.h3, color: colors.textSecondary, fontWeight: '400' as const, lineHeight: 30 },
+  tagline: { ...typography.h3, color: colors.textSecondary, fontFamily: 'DMSans_400Regular', lineHeight: 30 },
   features: { gap: spacing.md },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   featureDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, height: 56,
     borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center',
   },
-  primaryBtnText: { color: '#0A0A0A', fontSize: 14, fontWeight: '800' as const, letterSpacing: 2 },
+  primaryBtnText: { color: colors.onPrimary, fontSize: 14, fontWeight: '800' as const, letterSpacing: 2 },
   secondaryBtn: {
     height: 56, borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,

@@ -196,7 +196,7 @@ export default function ProfileSetupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       {/* Progress bar */}
       <View style={styles.progressTrack}>
@@ -432,9 +432,9 @@ function Step6({
       <View style={styles.macroBanner}>
         <MacroRow label="Calories" value={macros.calorieGoal} unit="kcal" big />
         <View style={styles.macroGrid}>
-          <MacroChip label="Protéines" value={macros.proteinGoal} unit="g" color="#1565C0" />
-          <MacroChip label="Glucides" value={macros.carbsGoal} unit="g" color="#E65C00" />
-          <MacroChip label="Lipides" value={macros.fatGoal} unit="g" color="#00875A" />
+          <MacroChip label="Protéines" value={macros.proteinGoal} unit="g" color="#a78bfa" />
+          <MacroChip label="Glucides" value={macros.carbsGoal} unit="g" color="#34d399" />
+          <MacroChip label="Lipides" value={macros.fatGoal} unit="g" color="#fbbf24" />
         </View>
       </View>
 
@@ -512,9 +512,9 @@ function Step7({ form, macros }: { form: FormData; macros: UserGoals }) {
       <View style={styles.macroBanner}>
         <MacroRow label="Calories" value={macros.calorieGoal} unit="kcal" big />
         <View style={styles.macroGrid}>
-          <MacroChip label="Protéines" value={macros.proteinGoal} unit="g" color="#1565C0" />
-          <MacroChip label="Glucides" value={macros.carbsGoal} unit="g" color="#E65C00" />
-          <MacroChip label="Lipides" value={macros.fatGoal} unit="g" color="#00875A" />
+          <MacroChip label="Protéines" value={macros.proteinGoal} unit="g" color="#a78bfa" />
+          <MacroChip label="Glucides" value={macros.carbsGoal} unit="g" color="#34d399" />
+          <MacroChip label="Lipides" value={macros.fatGoal} unit="g" color="#fbbf24" />
         </View>
       </View>
 

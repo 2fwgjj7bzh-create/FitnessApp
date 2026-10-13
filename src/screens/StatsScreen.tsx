@@ -19,7 +19,7 @@ const chartConfig = {
   backgroundGradientFrom: colors.card,
   backgroundGradientTo: colors.card,
   decimalPlaces: 1,
-  color: (opacity = 1) => `rgba(124, 111, 247, ${opacity})`,
+  color: (opacity = 1) => `rgba(200, 16, 46, ${opacity})`,
   labelColor: () => colors.textSecondary,
   style: { borderRadius: borderRadius.lg },
   propsForDots: { r: '4', strokeWidth: '2', stroke: colors.primary },
@@ -151,7 +151,7 @@ export default function StatsScreen() {
               }}
               width={CHART_W}
               height={180}
-              chartConfig={{ ...chartConfig, color: (o = 1) => `rgba(78, 205, 196, ${o})` }}
+              chartConfig={{ ...chartConfig, color: (o = 1) => `rgba(255, 255, 255, ${o})` }}
               bezier
               style={chartStyles.chart}
               withInnerLines
@@ -195,7 +195,7 @@ export default function StatsScreen() {
               }}
               width={CHART_W}
               height={180}
-              chartConfig={{ ...chartConfig, color: (o = 1) => `rgba(255, 107, 107, ${o})` }}
+              chartConfig={{ ...chartConfig, color: (o = 1) => `rgba(232, 71, 95, ${o})` }}
               bezier
               style={chartStyles.chart}
               withInnerLines

@@ -10,21 +10,21 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F0F13"
+      "backgroundColor": "#0A0A0A"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fitnessapp"
+      "bundleIdentifier": "com.anjr.fitnessapp"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F0F13"
+        "backgroundColor": "#FFFFFF"
       },
-      "package": "com.fitnessapp",
+      "package": "com.anjr.fitnessapp",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
@@ -41,12 +41,16 @@
         {
           "photosPermission": "FitnessApp a besoin d'accéder à vos photos pour les bilans."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
         "projectId": "c4ff2498-4ee6-45d5-92ef-25f85ed0cdba"
       }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }

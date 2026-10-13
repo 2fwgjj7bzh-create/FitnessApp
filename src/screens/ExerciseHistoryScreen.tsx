@@ -184,7 +184,7 @@ export default function ExerciseHistoryScreen() {
                     backgroundGradientFrom: colors.card,
                     backgroundGradientTo: colors.card,
                     decimalPlaces: 1,
-                    color: (opacity = 1) => `rgba(124, 111, 247, ${opacity})`,
+                    color: (opacity = 1) => `rgba(200, 16, 46, ${opacity})`,
                     labelColor: () => colors.textSecondary,
                     propsForDots: { r: '5', strokeWidth: '2', stroke: colors.primary },
                     propsForBackgroundLines: { stroke: colors.border },
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabBtnActive: { backgroundColor: colors.primary },
-  tabBtnText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  tabBtnText: { ...typography.caption, color: colors.textSecondary },
   tabBtnTextActive: { color: '#FFFFFF' },
   chartCard: {
     backgroundColor: colors.card,

@@ -3,6 +3,9 @@ import React, { Component, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
+import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
 import AppNavigator from './src/navigation/AppNavigator';
 
 interface ErrorState { hasError: boolean; error: Error | null }
@@ -37,11 +40,17 @@ const errStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center', padding: 24 },
   title: { color: '#F2F2F2', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 12 },
   msg: { color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 24 },
-  btn: { backgroundColor: '#C9A84C', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  btnText: { color: '#0A0A0A', fontWeight: '700' },
+  btn: { backgroundColor: '#C8102E', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+  btnText: { color: '#FFFFFF', fontWeight: '700' },
 });
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    BebasNeue_400Regular, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold,
+  });
+  // Si les polices ne chargent pas (réseau…), on démarre quand même avec la police système.
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: '#0A0A0A' }} />;
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor="#0A0A0A" />

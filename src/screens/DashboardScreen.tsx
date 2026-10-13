@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal, TextInput, Alert,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal, TextInput, Alert, Image,
 } from 'react-native';
 import { useFocusEffect, useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -122,9 +122,7 @@ export default function DashboardScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.headerLeft} onPress={() => { setNameInput(firstName); setShowNameModal(true); }}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarLetter}>{avatarLetter}</Text>
-            </View>
+            <Image source={require('../../assets/logo-badge.png')} style={styles.logo} />
             <View>
               <View style={styles.greetingRow}>
                 <Text style={styles.greeting}>
@@ -417,7 +415,7 @@ const progressStyles = StyleSheet.create({
   barFill: { height: '100%', borderRadius: 3 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   goal: { ...typography.caption, color: colors.textMuted },
-  percent: { ...typography.caption, fontWeight: '700' as const },
+  percent: { ...typography.caption },
 });
 
 const modalStyles = StyleSheet.create({
@@ -463,9 +461,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
   },
-  avatarLetter: { ...typography.h3, color: colors.primary, fontWeight: '700' as const },
+  avatarLetter: { ...typography.h3, color: colors.primary },
+  logo: { width: 48, height: 48, borderRadius: 24 },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  greeting: { ...typography.h3, color: colors.text, fontWeight: '700' as const },
+  greeting: { ...typography.h3, color: colors.text },
   date: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   startBtn: {
     flexDirection: 'row', alignItems: 'center',
@@ -490,7 +489,7 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: borderRadius.sm,
     backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center',
   },
-  todayBannerLabel: { ...typography.tiny, color: colors.primary, fontWeight: '700' as const, letterSpacing: 0.5 },
+  todayBannerLabel: { ...typography.tiny, color: colors.primary, letterSpacing: 0.5 },
   todayBannerTitle: { ...typography.bodyBold, color: colors.text, marginTop: 2 },
   todayBannerSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   playBtn: {
@@ -508,7 +507,7 @@ const styles = StyleSheet.create({
   todayRestText: { ...typography.caption, color: colors.textSecondary, flex: 1 },
 
   // Section titles
-  sectionTitle: { ...typography.label, color: colors.textMuted, fontWeight: '700' as const, letterSpacing: 0.5, marginBottom: spacing.sm, marginTop: spacing.lg },
+  sectionTitle: { ...typography.label, color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing.sm, marginTop: spacing.lg },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm },
   seeAll: { ...typography.label, color: colors.primary },
 
@@ -528,12 +527,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm, paddingVertical: 3,
     borderWidth: 1, borderColor: colors.border,
   },
-  weekCardCount: { ...typography.label, color: colors.primary, fontWeight: '700' as const },
+  weekCardCount: { ...typography.label, color: colors.primary },
   dotRow: { flexDirection: 'row', height: 10 },
   dot: { height: 10, backgroundColor: colors.border, borderRadius: 5 },
   dotDone: { backgroundColor: colors.primary },
   weekComplete: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
-  weekCompleteText: { ...typography.caption, color: colors.success, fontWeight: '600' as const },
+  weekCompleteText: { ...typography.caption, color: colors.success },
 
   // Check-in card
   checkinCard: {
@@ -543,7 +542,7 @@ const styles = StyleSheet.create({
   checkinRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: spacing.sm },
   checkinStat: { alignItems: 'center', gap: 3 },
   checkinIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  checkinValue: { ...typography.h3, color: colors.text, fontWeight: '700' as const },
+  checkinValue: { ...typography.h3, color: colors.text },
   checkinUnit: { ...typography.tiny, color: colors.textMuted },
   checkinLabel: { ...typography.caption, color: colors.textSecondary },
   checkinDivider: { width: 1, height: 36, backgroundColor: colors.border },
@@ -565,7 +564,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm, paddingVertical: 4,
     marginRight: spacing.md,
   },
-  workoutBadgeText: { ...typography.tiny, color: colors.textMuted, fontWeight: '600' as const },
+  workoutBadgeText: { ...typography.tiny, color: colors.textMuted },
 
   // Empty state
   emptyCard: {
@@ -586,5 +585,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.md, paddingVertical: 10, marginTop: spacing.sm,
   },
-  emptyBtnText: { ...typography.label, color: '#FFFFFF', fontWeight: '700' as const },
+  emptyBtnText: { ...typography.label, color: '#FFFFFF' },
 });

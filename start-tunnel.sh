@@ -4,6 +4,12 @@
 set -e
 cd "$(dirname "$0")"
 
+# Nouvelles dépendances ajoutées depuis le dernier lancement ? On les installe.
+if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+  echo "→ Installation des nouvelles dépendances (une seule fois)..."
+  npm install --no-audit --no-fund
+fi
+
 echo "→ Libération du port 8081..."
 lsof -ti:8081 | xargs kill -9 2>/dev/null || true
 pkill -f "ngrok http 8081" 2>/dev/null || true

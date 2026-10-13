@@ -1053,7 +1053,7 @@ const gStyles = StyleSheet.create({
   },
   carbsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
   carbsItem: { ...typography.caption, color: colors.textSecondary, flex: 1 },
-  carbsVal: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  carbsVal: { ...typography.caption, color: colors.text },
   carbsTotal: {
     borderTopWidth: 1, borderTopColor: 'rgba(52,211,153,0.3)',
     marginTop: 4, paddingTop: 8,
@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
   dateArrow: { padding: spacing.sm },
   dateCenter: { alignItems: 'center' },
   dateLabel: { ...typography.bodyBold, color: colors.text, textTransform: 'capitalize' },
-  todayBadge: { ...typography.tiny, color: colors.success, fontWeight: '600', marginTop: 2 },
+  todayBadge: { ...typography.tiny, color: colors.success, marginTop: 2 },
   summaryCard: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   waterText: { ...typography.bodyBold, color: colors.info, flex: 1 },
   waterBtns: { flexDirection: 'row', gap: spacing.sm },
   waterBtn: { paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: colors.surface, borderRadius: borderRadius.round },
-  waterBtnText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  waterBtnText: { ...typography.caption, color: colors.textSecondary },
   mealCard: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
     marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden',

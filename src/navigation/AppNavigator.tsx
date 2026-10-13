@@ -91,7 +91,7 @@ function MainTabNavigator() {
                 justifyContent: 'center', alignItems: 'center',
                 marginTop: -8,
               }}>
-                <Ionicons name={name} size={22} color={focused ? '#0A0A0A' : colors.textMuted} />
+                <Ionicons name={name} size={22} color={focused ? colors.onPrimary : colors.textMuted} />
               </View>
             );
           }

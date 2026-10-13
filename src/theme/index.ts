@@ -1,4 +1,4 @@
-// Palette : noir profond + accents or/doré — premium masculin
+// Charte Anajar : noir #0A0A0A, blanc, rouge #C8102E (Bebas Neue / DM Sans)
 export const colors = {
   // ─── Backgrounds ─────────────────────────────────────────────────────────────
   background: '#0A0A0A',
@@ -6,11 +6,12 @@ export const colors = {
   card: '#161616',
   cardBorder: '#2A2A2A',
 
-  // ─── Brand (or/doré) ─────────────────────────────────────────────────────────
-  primary: '#C9A84C',        // or principal
-  primaryLight: '#E4C97A',   // or clair (hover, focus)
-  primaryDark: '#9A7A2E',    // or foncé (pressed)
-  primaryMuted: '#C9A84C22', // or transparent (backgrounds subtils)
+  // ─── Brand (rouge) ───────────────────────────────────────────────────────────
+  primary: '#C8102E',        // rouge principal
+  primaryLight: '#E8475F',   // rouge clair (texte rouge sur fond noir, focus)
+  primaryDark: '#8E0B20',    // rouge foncé (pressed)
+  primaryMuted: '#C8102E26', // rouge transparent (backgrounds subtils)
+  onPrimary: '#FFFFFF',      // texte / icônes posés sur le rouge
 
   // ─── Semantic ────────────────────────────────────────────────────────────────
   secondary: '#888888',
@@ -52,15 +53,24 @@ export const borderRadius = {
   round: 999,
 };
 
+// Polices de la charte (chargées dans App.tsx). Les polices custom portent leur graisse :
+// on ne remet pas de fontWeight par-dessus (sinon iOS/Android retombent sur la police système).
+export const fonts = {
+  display: 'BebasNeue_400Regular',
+  regular: 'DMSans_400Regular',
+  medium: 'DMSans_500Medium',
+  bold: 'DMSans_700Bold',
+};
+
 export const typography = {
-  h1: { fontSize: 40, fontWeight: '900' as const, lineHeight: 44, letterSpacing: -1.5 },
-  h2: { fontSize: 26, fontWeight: '800' as const, lineHeight: 30, letterSpacing: -0.8 },
-  h3: { fontSize: 18, fontWeight: '700' as const, lineHeight: 24, letterSpacing: -0.3 },
-  body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
-  bodyBold: { fontSize: 15, fontWeight: '700' as const, lineHeight: 22 },
-  caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
-  label: { fontSize: 11, fontWeight: '700' as const, lineHeight: 16, letterSpacing: 0.8 },
-  tiny: { fontSize: 11, fontWeight: '400' as const, lineHeight: 16 },
+  h1: { fontFamily: fonts.display, fontSize: 44, lineHeight: 46, letterSpacing: 0.5 },
+  h2: { fontFamily: fonts.display, fontSize: 30, lineHeight: 32, letterSpacing: 0.5 },
+  h3: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24, letterSpacing: -0.2 },
+  body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
+  bodyBold: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 22 },
+  caption: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  label: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 16, letterSpacing: 0.8 },
+  tiny: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
 };
 
 export const shadows = {
@@ -79,7 +89,7 @@ export const shadows = {
     elevation: 4,
   },
   primary: {
-    shadowColor: '#C9A84C',
+    shadowColor: '#C8102E',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -96,8 +106,8 @@ export const shadows = {
 
 // Dégradés réutilisables (pour LinearGradient si besoin)
 export const gradients = {
-  gold: ['#C9A84C', '#9A7A2E'],
-  goldSubtle: ['#C9A84C22', '#C9A84C00'],
+  red: ['#C8102E', '#8E0B20'],
+  redSubtle: ['#C8102E26', '#C8102E00'],
   dark: ['#1A1A1A', '#0A0A0A'],
   card: ['#1E1E1E', '#141414'],
 };

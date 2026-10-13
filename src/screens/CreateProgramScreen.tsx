@@ -471,12 +471,12 @@ const rowStyles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
-  badgeText: { ...typography.caption, color: '#FFFFFF', fontWeight: '700' },
+  badgeText: { ...typography.caption, color: '#FFFFFF' },
   headerMid: { flex: 1, gap: 4 },
   name: { ...typography.bodyBold, color: colors.text },
   headerMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   muscleTag: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.round },
-  muscleTagText: { ...typography.tiny, fontWeight: '600' },
+  muscleTagText: { ...typography.tiny },
   summary: { ...typography.caption, color: colors.textSecondary },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   details: {
@@ -484,7 +484,7 @@ const rowStyles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.border,
     gap: spacing.sm, paddingTop: spacing.md,
   },
-  sectionLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.5 },
+  sectionLabel: { ...typography.tiny, color: colors.textMuted, letterSpacing: 0.5 },
   hint: { ...typography.tiny, color: colors.textMuted, fontStyle: 'italic', marginTop: -4 },
   // Per-set rows
   setRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -494,7 +494,7 @@ const rowStyles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
   },
-  setNumText: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
+  setNumText: { ...typography.caption, color: colors.textSecondary },
   repsInput: {
     flex: 1,
     backgroundColor: colors.inputBg,
@@ -507,7 +507,7 @@ const rowStyles = StyleSheet.create({
   },
   repsLabel: { ...typography.caption, color: colors.textMuted, width: 28 },
   addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
-  addSetText: { ...typography.caption, color: colors.primary, fontWeight: '600' },
+  addSetText: { ...typography.caption, color: colors.primary },
   // Weight
   weightSection: { gap: 6 },
   weightInput: {
@@ -569,7 +569,7 @@ const pickerStyles = StyleSheet.create({
     marginRight: spacing.xs, borderWidth: 1, borderColor: colors.border,
   },
   groupChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  groupChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  groupChipText: { ...typography.caption, color: colors.textSecondary },
   groupChipTextActive: { color: colors.text },
   item: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -578,7 +578,7 @@ const pickerStyles = StyleSheet.create({
   itemLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   itemName: { ...typography.body, color: colors.text },
   groupTag: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.round },
-  groupTagText: { ...typography.tiny, fontWeight: '600' },
+  groupTagText: { ...typography.tiny },
   closeBtn: {
     backgroundColor: colors.card, borderRadius: borderRadius.round,
     padding: spacing.md, alignItems: 'center', marginTop: spacing.sm,
@@ -590,7 +590,7 @@ const pickerStyles = StyleSheet.create({
     borderRadius: borderRadius.round, backgroundColor: colors.card,
     marginRight: spacing.xs, borderWidth: 1, borderColor: colors.border,
   },
-  equipChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  equipChipText: { ...typography.caption, color: colors.textSecondary },
 });
 
 const styles = StyleSheet.create({

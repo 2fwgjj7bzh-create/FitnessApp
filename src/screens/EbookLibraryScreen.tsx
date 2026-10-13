@@ -171,7 +171,7 @@ export default function EbookLibraryScreen() {
 
 function EbookCard({ ebook }: { ebook: EbookWithEntitlement }) {
   const typeLabel = ebook.type === 'powerbuilding' ? 'POWERBUILDING' : 'BODYBUILDING';
-  const typeColor = ebook.type === 'powerbuilding' ? '#E4C97A' : '#7AB4E4';
+  const typeColor = ebook.type === 'powerbuilding' ? colors.primaryLight : '#BDBDBD';
 
   return (
     <View style={[cardStyles.card, !ebook.owned && cardStyles.lockedCard]}>
@@ -223,7 +223,7 @@ function EbookCard({ ebook }: { ebook: EbookWithEntitlement }) {
         {ebook.owned ? (
           <View style={cardStyles.ownedActions}>
             <TouchableOpacity style={cardStyles.primaryAction}>
-              <Ionicons name="play" size={16} color="#0A0A0A" />
+              <Ionicons name="play" size={16} color={colors.onPrimary} />
               <Text style={cardStyles.primaryActionText}>Démarrer le programme</Text>
             </TouchableOpacity>
             <TouchableOpacity style={cardStyles.secondaryAction}>
@@ -233,7 +233,7 @@ function EbookCard({ ebook }: { ebook: EbookWithEntitlement }) {
           </View>
         ) : (
           <TouchableOpacity style={cardStyles.unlockBtn}>
-            <Ionicons name="lock-open-outline" size={16} color={colors.background} />
+            <Ionicons name="lock-open-outline" size={16} color={colors.onPrimary} />
             <Text style={cardStyles.unlockBtnText}>Débloquer</Text>
           </TouchableOpacity>
         )}
@@ -271,7 +271,7 @@ const metaStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm, paddingVertical: 4,
   },
   lockedChip: { backgroundColor: colors.locked },
-  text: { ...typography.tiny, color: colors.primary, fontWeight: '600' as const },
+  text: { ...typography.tiny, color: colors.primary },
   lockedText: { color: colors.lockedText },
 });
 
@@ -282,8 +282,8 @@ const filterStyles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  text: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' as const },
-  textActive: { color: '#0A0A0A', fontWeight: '700' as const },
+  text: { ...typography.caption, color: colors.textSecondary },
+  textActive: { color: colors.onPrimary, fontWeight: '700' as const },
 });
 
 const cardStyles = StyleSheet.create({
@@ -301,7 +301,7 @@ const cardStyles = StyleSheet.create({
     borderRadius: borderRadius.round, borderWidth: 1,
     paddingHorizontal: spacing.sm, paddingVertical: 3,
   },
-  typeBadgeText: { ...typography.tiny, fontWeight: '700' as const, letterSpacing: 0.5 },
+  typeBadgeText: { ...typography.tiny, letterSpacing: 0.5 },
   body: { padding: spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   title: { ...typography.h3, color: colors.text, flex: 1 },
@@ -313,7 +313,7 @@ const cardStyles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
     backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: 12,
   },
-  primaryActionText: { ...typography.bodyBold, color: '#0A0A0A', fontSize: 14 },
+  primaryActionText: { ...typography.bodyBold, color: colors.onPrimary, fontSize: 14 },
   secondaryAction: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
     borderWidth: 1, borderColor: colors.primary, borderRadius: borderRadius.md,
@@ -348,5 +348,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm, backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.round,
   },
-  emptyBtnText: { ...typography.bodyBold, color: '#0A0A0A' },
+  emptyBtnText: { ...typography.bodyBold, color: colors.onPrimary },
 });

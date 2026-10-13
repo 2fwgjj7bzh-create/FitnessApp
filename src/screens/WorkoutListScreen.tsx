@@ -423,7 +423,7 @@ const tplStyles = StyleSheet.create({
     marginTop: spacing.sm, backgroundColor: colors.primary + '22',
     borderRadius: borderRadius.round, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start',
   },
-  badgeText: { ...typography.tiny, color: colors.primary, fontWeight: '700' },
+  badgeText: { ...typography.tiny, color: colors.primary },
   manualBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing.sm, paddingVertical: spacing.md,
@@ -441,7 +441,7 @@ const modalStyles = StyleSheet.create({
   },
   handle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
-  sectionLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.sm },
+  sectionLabel: { ...typography.caption, color: colors.textMuted, marginTop: spacing.md, marginBottom: spacing.sm },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
@@ -650,7 +650,7 @@ const calcStyles = StyleSheet.create({
   container: { padding: spacing.md },
   inputRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
   inputGroup: { flex: 1, gap: spacing.xs },
-  inputLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
+  inputLabel: { ...typography.tiny, color: colors.textMuted, letterSpacing: 0.8, marginBottom: 4 },
   input: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md, paddingVertical: spacing.md,
@@ -664,7 +664,7 @@ const calcStyles = StyleSheet.create({
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
   },
   fChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  fChipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  fChipText: { ...typography.caption, color: colors.textSecondary },
   fChipTextActive: { color: '#FFFFFF' },
   stepper: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -684,7 +684,7 @@ const calcStyles = StyleSheet.create({
     padding: spacing.xl, alignItems: 'center', marginBottom: spacing.lg,
     borderWidth: 1, borderColor: colors.cardBorder, ...shadows.md,
   },
-  resultLabel: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.sm },
+  resultLabel: { ...typography.tiny, color: colors.textMuted, letterSpacing: 1, marginBottom: spacing.sm },
   resultValue: { fontSize: 52, fontWeight: '800' as const, color: colors.primary, letterSpacing: -1 },
   resultSub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm },
   resultWarn: { ...typography.caption, color: colors.warning, marginTop: spacing.xs, textAlign: 'center' },
@@ -697,7 +697,7 @@ const calcStyles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  thText: { ...typography.tiny, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.5 },
+  thText: { ...typography.tiny, color: colors.textMuted, letterSpacing: 0.5 },
   tableRow: {
     flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border + '55',
