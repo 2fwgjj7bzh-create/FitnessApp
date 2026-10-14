@@ -33,7 +33,7 @@
       "url": "https://u.expo.dev/c4ff2498-4ee6-45d5-92ef-25f85ed0cdba"
     },
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "sdkVersion"
     },
     "plugins": [
       [
