@@ -13,6 +13,7 @@ import { WorkoutStackParamList } from '../types';
 import { EXERCISE_GUIDE } from '../data/exerciseGuide';
 import { REFERENCES, GENERAL_EVIDENCE, Reference } from '../data/references';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS } from '../data/exerciseDatabase';
+import BodyMap from '../components/BodyMap';
 
 type Nav = NativeStackNavigationProp<WorkoutStackParamList, 'ExerciseGuide'>;
 type Route = RouteProp<WorkoutStackParamList, 'ExerciseGuide'>;
@@ -70,6 +71,7 @@ export default function ExerciseGuideScreen() {
   const name = route.params?.exerciseName;
   const [search, setSearch] = useState('');
   const [group, setGroup] = useState('Tous');
+  const [mode, setMode] = useState<'list' | 'body'>('list');
 
   const list = useMemo(() => {
     const names = Object.keys(EXERCISE_GUIDE);
@@ -94,6 +96,20 @@ export default function ExerciseGuideScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {name ? <Guide name={name} /> : (
           <>
+            <View style={styles.modeRow}>
+              {(['list', 'body'] as const).map(m => (
+                <TouchableOpacity key={m} style={[styles.modeBtn, mode === m && styles.chipActive]} onPress={() => setMode(m)}>
+                  <Ionicons name={m === 'list' ? 'list' : 'body'} size={14} color={mode === m ? colors.onPrimary : colors.textSecondary} />
+                  <Text style={[styles.chipText, mode === m && styles.chipTextActive]}>{m === 'list' ? 'Fiches' : 'Par muscle'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {mode === 'body' ? (
+              <BodyMap
+                actionLabel="Voir"
+                onPressExercise={n => EXERCISE_GUIDE[n] ? navigation.push('ExerciseGuide', { exerciseName: n }) : navigation.navigate('ExerciseHistory', { exerciseName: n })}
+              />
+            ) : (<>
             <View style={styles.card}>
               <Text style={styles.label}>PRINCIPES GÉNÉRAUX</Text>
               {GENERAL_EVIDENCE.map((e, i) => <Text key={i} style={styles.bullet}>•  {e.text}</Text>)}
@@ -119,6 +135,7 @@ export default function ExerciseGuideScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             ))}
+            </>)}
             <Text style={styles.foot}>
               {Object.keys(EXERCISE_GUIDE).length} fiches · {Object.keys(REFERENCES).length} références vérifiées sur PubMed. Touche une référence pour l'ouvrir.
             </Text>
@@ -155,6 +172,8 @@ const styles = StyleSheet.create({
   refJournal: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic' },
   refLink: { ...typography.tiny, color: colors.primaryLight, marginTop: 2 },
   empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  modeRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 999, padding: 3, marginBottom: spacing.sm },
+  modeBtn: { flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 8, borderRadius: 999 },
   search: {
     backgroundColor: colors.inputBg, borderRadius: borderRadius.md, padding: spacing.md,
     ...typography.body, color: colors.text, marginTop: spacing.sm, marginBottom: spacing.sm,

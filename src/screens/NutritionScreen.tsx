@@ -12,6 +12,7 @@ import { getNutritionDay, saveNutritionDay, getGoals, saveGoals } from '../stora
 import { uid, localDateStr } from '../utils/helpers';
 import { NutritionDay, Food, MealType, UserGoals } from '../types';
 import { FOOD_DB, FOOD_CATEGORIES, FoodEntry } from '../data/foodDatabase';
+import WaterCard from '../components/WaterCard';
 import { DEFAULT_GOALS, computeGoals, calcBMR, FORMULAS, ACTIVITY_LEVELS, MEASURED_ACTIVITY } from '../utils/metabolism';
 import { getMetabolismSettings, saveMetabolismSettings, computeMeasured, MeasuredResult, MIN_DAYS_FOR_MEASURED } from '../lib/metabolismSettings';
 
@@ -413,20 +414,7 @@ export default function NutritionScreen() {
           </View>
 
           {/* Water */}
-          <View style={styles.waterCard}>
-            <Text style={styles.waterEmoji}>💧</Text>
-            <Text style={styles.waterText}>
-              {(day.waterMl || 0) >= 1000 ? `${((day.waterMl || 0) / 1000).toFixed(1)} L` : `${day.waterMl || 0} ml`}
-            </Text>
-            <View style={styles.waterBtns}>
-              <TouchableOpacity style={styles.waterBtn} onPress={() => updateWater(-250)}>
-                <Text style={styles.waterBtnText}>−250ml</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.waterBtn, { backgroundColor: '#64b5f615' }]} onPress={() => updateWater(250)}>
-                <Text style={[styles.waterBtnText, { color: colors.info }]}>+250ml</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <WaterCard date={date} waterMl={day.waterMl || 0} onAdd={updateWater} />
 
           {/* Meals */}
           {day.meals.map(meal => {

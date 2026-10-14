@@ -16,6 +16,7 @@ import { DEFAULT_REST_SECONDS, scheduleRestEnd, cancelRestEnd, restEndFeedback, 
 import { uid, formatDateLong } from '../utils/helpers';
 import { Exercise, ExerciseSet, Workout, WorkoutStackParamList, ProgramExercise, UserExercise } from '../types';
 import { EXERCISE_GUIDE } from '../data/exerciseGuide';
+import BodyMap from '../components/BodyMap';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS, MUSCLE_GROUP_COLORS, EQUIPMENT_LIST, EQUIPMENT_ICONS, EQUIPMENT_COLORS, Equipment, ExerciseTemplate } from '../data/exerciseDatabase';
 
 type PickerItem = ExerciseTemplate & { photoUri?: string };
@@ -53,6 +54,7 @@ export default function WorkoutSessionScreen() {
   const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createInitialName, setCreateInitialName] = useState('');
+  const [pickerMode, setPickerMode] = useState<'list' | 'body'>('list');
   const [allWorkouts, setAllWorkouts] = useState<Workout[]>([]);
   const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString());
   const [now, setNow] = useState(Date.now());
@@ -546,6 +548,20 @@ export default function WorkoutSessionScreen() {
           <View style={pickerStyles.sheet}>
             <View style={pickerStyles.handle} />
             <Text style={pickerStyles.title}>Ajouter un exercice</Text>
+            <View style={pickerStyles.modeRow}>
+              {(['list', 'body'] as const).map(m => (
+                <TouchableOpacity key={m} style={[pickerStyles.modeBtn, pickerMode === m && pickerStyles.modeBtnActive]} onPress={() => setPickerMode(m)}>
+                  <Ionicons name={m === 'list' ? 'list' : 'body'} size={14} color={pickerMode === m ? colors.onPrimary : colors.textSecondary} />
+                  <Text style={[pickerStyles.modeText, pickerMode === m && { color: colors.onPrimary }]}>{m === 'list' ? 'Liste' : 'Par muscle'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {pickerMode === 'body' ? (
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <BodyMap onPressExercise={name => { const t = EXERCISE_DATABASE.find(e => e.name === name); if (t) addExercise(t); }} />
+                <View style={{ height: 20 }} />
+              </ScrollView>
+            ) : (<>
 
             <TextInput
               style={pickerStyles.search}
@@ -634,6 +650,7 @@ export default function WorkoutSessionScreen() {
               )}
               ListFooterComponent={<View style={{ height: 20 }} />}
             />
+            </>)}
 
             <TouchableOpacity style={pickerStyles.closeBtn} onPress={() => setShowPicker(false)}>
               <Text style={pickerStyles.closeBtnText}>Fermer</Text>
@@ -1466,6 +1483,10 @@ const exStyles = StyleSheet.create({
 });
 
 const pickerStyles = StyleSheet.create({
+  modeRow: { flexDirection: 'row', backgroundColor: colors.background, borderRadius: 999, padding: 3, marginBottom: spacing.sm },
+  modeBtn: { flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 7, borderRadius: 999 },
+  modeBtnActive: { backgroundColor: colors.primary },
+  modeText: { ...typography.caption, color: colors.textSecondary },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,
