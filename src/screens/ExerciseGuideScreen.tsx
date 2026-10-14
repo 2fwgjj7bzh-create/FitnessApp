@@ -2,7 +2,7 @@
  * Bibliothèque des exercices : fiches (muscles, consignes, erreurs) + références scientifiques
  * vérifiées (PubMed). Ouverte avec { exerciseName } → une fiche ; sans paramètre → la liste.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Linking } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,7 @@ import { EXERCISE_GUIDE } from '../data/exerciseGuide';
 import { REFERENCES, GENERAL_EVIDENCE, Reference } from '../data/references';
 import { EXERCISE_DATABASE, MUSCLE_GROUPS } from '../data/exerciseDatabase';
 import BodyMap from '../components/BodyMap';
+import { getVideoLinks, setVideoLink, openVideo, searchDemo } from '../lib/videos';
 
 type Nav = NativeStackNavigationProp<WorkoutStackParamList, 'ExerciseGuide'>;
 type Route = RouteProp<WorkoutStackParamList, 'ExerciseGuide'>;
@@ -33,13 +34,54 @@ function RefLine({ id, index }: { id: string; index?: number }) {
   );
 }
 
+function VideoCard({ name }: { name: string }) {
+  const [url, setUrl] = useState<string | undefined>();
+  const [edit, setEdit] = useState(false);
+  const [draft, setDraft] = useState('');
+  useEffect(() => { getVideoLinks().then(v => { setUrl(v[name]); setDraft(v[name] ?? ''); }); }, [name]);
+  return (
+    <View style={styles.card}>
+      <Text style={styles.label}>VIDÉO DE DÉMONSTRATION</Text>
+      {url && !edit && (
+        <TouchableOpacity style={styles.videoBtn} onPress={() => openVideo(url)}>
+          <Ionicons name="play-circle" size={22} color={colors.onPrimary} />
+          <Text style={styles.videoBtnText}>Voir ma vidéo</Text>
+        </TouchableOpacity>
+      )}
+      {edit ? (
+        <>
+          <TextInput
+            style={styles.search} value={draft} onChangeText={setDraft} autoCapitalize="none" autoCorrect={false}
+            placeholder="Colle le lien (YouTube, Instagram, Drive…)" placeholderTextColor={colors.textMuted}
+          />
+          <TouchableOpacity style={styles.videoBtn} onPress={async () => { await setVideoLink(name, draft); setUrl(draft.trim() || undefined); setEdit(false); }}>
+            <Text style={styles.videoBtnText}>Enregistrer le lien</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.videoRow}>
+          <TouchableOpacity style={styles.videoGhost} onPress={() => setEdit(true)}>
+            <Ionicons name="link-outline" size={16} color={colors.primaryLight} />
+            <Text style={styles.videoGhostText}>{url ? 'Modifier ma vidéo' : 'Ajouter ma vidéo'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.videoGhost} onPress={() => searchDemo(name)}>
+            <Ionicons name="logo-youtube" size={16} color={colors.primaryLight} />
+            <Text style={styles.videoGhostText}>Chercher une démo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function Guide({ name }: { name: string }) {
   const g = EXERCISE_GUIDE[name];
-  if (!g) return <Text style={styles.empty}>Pas encore de fiche pour cet exercice.</Text>;
+  if (!g) return <><VideoCard name={name} /><Text style={styles.empty}>Pas encore de fiche pour cet exercice.</Text></>;
   const refIds = Array.from(new Set(g.evidence.flatMap(e => e.refs)));
   const num = (id: string) => refIds.indexOf(id) + 1;
   return (
     <>
+      <VideoCard name={name} />
       <View style={styles.card}>
         <Text style={styles.label}>MUSCLES</Text>
         <Text style={styles.body}><Text style={styles.strong}>Principaux : </Text>{g.primary.join(', ')}</Text>
@@ -107,7 +149,7 @@ export default function ExerciseGuideScreen() {
             {mode === 'body' ? (
               <BodyMap
                 actionLabel="Voir"
-                onPressExercise={n => EXERCISE_GUIDE[n] ? navigation.push('ExerciseGuide', { exerciseName: n }) : navigation.navigate('ExerciseHistory', { exerciseName: n })}
+                onPressExercise={n => navigation.push('ExerciseGuide', { exerciseName: n })}
               />
             ) : (<>
             <View style={styles.card}>
@@ -172,6 +214,11 @@ const styles = StyleSheet.create({
   refJournal: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic' },
   refLink: { ...typography.tiny, color: colors.primaryLight, marginTop: 2 },
   empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  videoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: 12 },
+  videoBtnText: { ...typography.bodyBold, color: colors.onPrimary },
+  videoRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  videoGhost: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: colors.primary + '66', borderRadius: borderRadius.md, paddingVertical: 10 },
+  videoGhostText: { ...typography.caption, color: colors.primaryLight },
   modeRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 999, padding: 3, marginBottom: spacing.sm },
   modeBtn: { flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 8, borderRadius: 999 },
   search: {

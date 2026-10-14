@@ -24,6 +24,8 @@ import CheckinCompareScreen from '../screens/CheckinCompareScreen';
 import CheckinSettingsScreen from '../screens/CheckinSettingsScreen';
 import { getCheckins } from '../storage';
 import { rescheduleCheckinNotifications } from '../lib/checkin';
+import { rescheduleWorkoutReminders } from '../lib/reminders';
+import { rescheduleWaterReminders } from '../lib/water';
 import EbookLibraryScreen from '../screens/EbookLibraryScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
@@ -136,7 +138,13 @@ function RootNavigator() {
   const { session, loading } = useAuth();
 
   // Notifications de bilan : on recharge les prochaines à chaque ouverture
-  React.useEffect(() => { getCheckins().then(c => rescheduleCheckinNotifications(c)).catch(() => {}); }, []);
+  React.useEffect(() => {
+    (async () => {
+      await getCheckins().then(c => rescheduleCheckinNotifications(c)).catch(() => {});
+      await rescheduleWorkoutReminders().catch(() => {});
+      await rescheduleWaterReminders().catch(() => {});
+    })();
+  }, []);
 
   if (BYPASS_AUTH) {
     return (

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Image, ActivityIndicator, Platform, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '../theme';
@@ -7,6 +7,10 @@ import { useAuth } from '../lib/authContext';
 import { exportBackup, pickBackup, restoreBackup, describeBackup } from '../lib/backup';
 import { healthStatus, requestHealthAccess } from '../lib/health';
 import { syncNeatFromHealth } from '../lib/neat';
+import { getReminderSettings, saveReminderSettings, ReminderSettings, DEFAULT_REMINDERS } from '../lib/reminders';
+import { getSchedule, describeSchedule } from '../lib/checkin';
+import { getWaterSettings } from '../lib/water';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -20,6 +24,20 @@ export default function ProfileScreen() {
 
   const email = user?.email ?? '—';
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+  const navigation = useNavigation<any>();
+  const [rem, setRem] = useState<ReminderSettings>(DEFAULT_REMINDERS);
+  const [bilanText, setBilanText] = useState('');
+  const [waterText, setWaterText] = useState('');
+  useFocusEffect(useCallback(() => {
+    getReminderSettings().then(setRem);
+    getSchedule().then(s => setBilanText(describeSchedule(s)));
+    getWaterSettings().then(w => setWaterText(w.reminders ? `Toutes les ${w.everyHours} h` : 'Désactivés'));
+  }, []));
+  const updateWorkout = async (patch: Partial<ReminderSettings['workout']>) => {
+    const next = { ...rem, workout: { ...rem.workout, ...patch } };
+    setRem(next);
+    await saveReminderSettings(next);
+  };
 
   const notify = (title: string, msg: string) => {
     if (Platform.OS === 'web') window.alert(`${title}\n\n${msg}`); else Alert.alert(title, msg);
@@ -99,6 +117,30 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Rappels */}
+        <Text style={styles.sectionLabel}>RAPPELS</Text>
+        <View style={styles.card}>
+          <View style={rowStyles.row}>
+            <View style={rowStyles.iconWrap}><Ionicons name="barbell-outline" size={18} color={colors.primaryLight} /></View>
+            <Text style={rowStyles.label}>Séance du jour</Text>
+            <Switch value={rem.workout.enabled} onValueChange={v => updateWorkout({ enabled: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor="#FFFFFF" ios_backgroundColor={colors.border} />
+          </View>
+          {rem.workout.enabled && (
+            <View style={styles.timeRow}>
+              <Text style={styles.timeLabel}>Heure du rappel (jours avec un programme dans ton planning)</Text>
+              <View style={styles.timeCtrl}>
+                <TouchableOpacity onPress={() => updateWorkout({ hour: (rem.workout.hour + 23) % 24 })}><Ionicons name="remove-circle-outline" size={22} color={colors.textSecondary} /></TouchableOpacity>
+                <Text style={styles.timeVal}>{String(rem.workout.hour).padStart(2, '0')}:{String(rem.workout.minute).padStart(2, '0')}</Text>
+                <TouchableOpacity onPress={() => updateWorkout({ hour: (rem.workout.hour + 1) % 24 })}><Ionicons name="add-circle-outline" size={22} color={colors.textSecondary} /></TouchableOpacity>
+              </View>
+            </View>
+          )}
+          <View style={styles.divider} />
+          <SettingsRow icon="clipboard-outline" label="Bilan" value={bilanText} onPress={() => navigation.navigate('Bilan', { screen: 'CheckinSettings' })} />
+          <View style={styles.divider} />
+          <SettingsRow icon="water-outline" label="Hydratation" value={waterText} onPress={() => navigation.navigate('NutritionTab')} />
+        </View>
+
         {/* Santé */}
         <Text style={styles.sectionLabel}>APPLE SANTÉ (NEAT)</Text>
         <View style={styles.card}>
@@ -114,7 +156,7 @@ export default function ProfileScreen() {
           <SettingsRow icon="cloud-download-outline" label="Restaurer une sauvegarde" value={busy === 'import' ? '…' : ''} onPress={busy ? undefined : handleImport} />
         </View>
         <Text style={styles.hint}>
-          Tes données sont stockées sur ce téléphone. Exporte une sauvegarde régulièrement (Fichiers / iCloud Drive) : si l'appli est supprimée, c'est elle qui te permettra de tout récupérer.
+          Tes données sont stockées sur ce téléphone. Exporte une sauvegarde régulièrement (Fichiers / iCloud Drive) : si l'appli est supprimée, c'est elle qui te permettra de tout récupérer (les photos de bilan ne sont pas incluses : garde-les aussi dans ta galerie).
         </Text>
 
         {/* Section app */}
@@ -178,6 +220,10 @@ const styles = StyleSheet.create({
   avatarLetter: { fontSize: 32, fontWeight: '700' as const, color: colors.primary },
   logo: { width: 96, height: 96, borderRadius: 48, marginBottom: spacing.sm },
   hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm, lineHeight: 18 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
+  timeLabel: { ...typography.caption, color: colors.textMuted, flex: 1 },
+  timeCtrl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeVal: { ...typography.bodyBold, color: colors.text, minWidth: 52, textAlign: 'center' },
   email: { ...typography.body, color: colors.textSecondary },
   sectionLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.lg },
   card: {

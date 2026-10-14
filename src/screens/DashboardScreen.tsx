@@ -14,6 +14,7 @@ import {
 } from '../storage';
 import { calcDayNutrition } from '../utils/helpers';
 import NeatCard from '../components/NeatCard';
+import HabitsCard from '../components/HabitsCard';
 import { getSchedule, dueDateFor } from '../lib/checkin';
 import { localDateStr } from '../utils/helpers';
 import { today, formatDate } from '../utils/helpers';
@@ -235,6 +236,9 @@ export default function DashboardScreen() {
             </View>
           )}
         </TouchableOpacity>
+
+        {/* Habitudes */}
+        <HabitsCard />
 
         {/* NEAT */}
         <NeatCard onGoalsUpdated={load} />
