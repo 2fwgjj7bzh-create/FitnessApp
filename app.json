@@ -56,7 +56,9 @@
         {
           "color": "#C8102E"
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

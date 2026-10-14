@@ -78,7 +78,8 @@ function MainTabNavigator() {
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' as const, marginTop: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' as const, marginTop: 2, letterSpacing: -0.3 },
+        tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarIcon: ({ focused, color, size }) => {
           const icon = TAB_ICONS[route.name];
           const name = (focused ? icon?.active : icon?.inactive) as any;
@@ -102,10 +103,10 @@ function MainTabNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard"   component={DashboardScreen}    options={{ tabBarLabel: 'Accueil' }} />
-      <Tab.Screen name="ProgramsTab" component={EbookLibraryScreen} options={{ tabBarLabel: 'Programmes' }} />
+      <Tab.Screen name="ProgramsTab" component={EbookLibraryScreen} options={{ tabBarLabel: 'Ebooks' }} />
       <Tab.Screen name="WorkoutTab"  component={WorkoutNavigator}   options={{ tabBarLabel: 'Séance' }} />
       <Tab.Screen name="NutritionTab" component={NutritionScreen}   options={{ tabBarLabel: 'Nutrition' }} />
-      <Tab.Screen name="ProgressTab" component={StatsScreen}        options={{ tabBarLabel: 'Progression' }} />
+      <Tab.Screen name="ProgressTab" component={StatsScreen}        options={{ tabBarLabel: 'Progrès' }} />
       <Tab.Screen name="ProfileTab"  component={ProfileScreen}      options={{ tabBarLabel: 'Profil' }} />
     </Tab.Navigator>
   );
