@@ -1,281 +1,287 @@
+/**
+ * Nouveau bilan / modification : poids, photos (face, dos, profil), mensurations
+ * gauche/droite et questionnaire (générique ou personnalisé).
+ */
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-  KeyboardAvoidingView, Platform, Image, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Image,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { colors, spacing, borderRadius, typography, shadows } from '../theme';
-import { saveCheckin, getCheckins } from '../storage';
-import { uid, today, FEELING_LABELS, SLEEP_QUALITY_LABELS } from '../utils/helpers';
-import { WeeklyCheckin, Measurements, FeelingLevel, SleepQuality, BodyStackParamList } from '../types';
+import { colors, spacing, borderRadius, typography } from '../theme';
+import { getCheckins, saveCheckin } from '../storage';
+import { uid, today, formatDateLong } from '../utils/helpers';
+import {
+  BodyStackParamList, CheckinAnswer, CheckinPhotos, CheckinQuestion, Measurements, WeeklyCheckin,
+} from '../types';
+import {
+  getQuestions, legacyFieldsFromAnswers, answerFor, MEASUREMENT_FIELDS, normalizeMeasurements,
+  photosOf, rescheduleCheckinNotifications,
+} from '../lib/checkin';
+import { persistImage } from '../lib/media';
 
-type NavProp = NativeStackNavigationProp<BodyStackParamList, 'NewCheckin'>;
-type RoutePropType = RouteProp<BodyStackParamList, 'NewCheckin'>;
+type Nav = NativeStackNavigationProp<BodyStackParamList, 'NewCheckin'>;
+type Route = RouteProp<BodyStackParamList, 'NewCheckin'>;
 
-const FEELING_EMOJIS = ['😞', '😕', '😐', '😊', '🤩'];
-const SLEEP_EMOJIS = ['😴', '😪', '😑', '😌', '✨'];
+const POSES: { key: keyof CheckinPhotos; label: string }[] = [
+  { key: 'front', label: 'Face' },
+  { key: 'back', label: 'Dos' },
+  { key: 'side', label: 'Profil' },
+];
 
 export default function NewCheckinScreen() {
-  const navigation = useNavigation<NavProp>();
-  const route = useRoute<RoutePropType>();
-  const checkinId = route.params?.checkinId;
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<Route>();
+  const editId = route.params?.checkinId;
 
-  const [date] = useState(today());
+  const [existing, setExisting] = useState<WeeklyCheckin | null>(null);
+  const [questions, setQuestions] = useState<CheckinQuestion[]>([]);
   const [weight, setWeight] = useState('');
-  const [feeling, setFeeling] = useState<FeelingLevel>(3);
-  const [sleepHours, setSleepHours] = useState('7.5');
-  const [sleepQuality, setSleepQuality] = useState<SleepQuality>(3);
-  const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
-  const [notes, setNotes] = useState('');
-  const [measurements, setMeasurements] = useState<Measurements>({});
-  const [showMeasurements, setShowMeasurements] = useState(false);
+  const [photos, setPhotos] = useState<CheckinPhotos>({});
+  const [meas, setMeas] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, CheckinAnswer>>({});
+  const [saving, setSaving] = useState(false);
+  const [lastWeight, setLastWeight] = useState<number | undefined>();
 
   useEffect(() => {
-    if (checkinId) {
-      getCheckins().then(list => {
-        const c = list.find(x => x.id === checkinId);
-        if (c) {
-          setWeight(c.weight ? String(c.weight) : '');
-          setFeeling(c.feeling);
-          setSleepHours(String(c.sleepHours));
-          setSleepQuality(c.sleepQuality);
-          setPhotoUri(c.photoUri);
-          setNotes(c.notes || '');
-          setMeasurements(c.measurements || {});
-          if (c.measurements && Object.keys(c.measurements).length > 0) {
-            setShowMeasurements(true);
-          }
-        }
-      });
-    }
-  }, [checkinId]);
+    (async () => {
+      const [qs, list] = await Promise.all([getQuestions(), getCheckins()]);
+      const c = editId ? list.find(x => x.id === editId) ?? null : null;
+      setExisting(c);
+      setLastWeight(list.find(x => x.id !== editId && x.weight)?.weight);
+      if (c) {
+        setWeight(c.weight ? String(c.weight) : '');
+        setPhotos(photosOf(c));
+        const m = normalizeMeasurements(c.measurements);
+        const mm: Record<string, string> = {};
+        MEASUREMENT_FIELDS.forEach(f => { const v = m[f.key]; if (v) mm[f.key] = String(v); });
+        setMeas(mm);
+        const a: Record<string, CheckinAnswer> = {};
+        qs.forEach(q => { const v = answerFor(c, q.id); if (v !== undefined) a[q.id] = v; });
+        setAnswers(a);
+        // questions du bilan d'origine qui ne sont plus actives : on les garde affichées
+        setQuestions(qs.filter(q => q.active || (c.answers && c.answers[q.id] !== undefined)));
+      } else {
+        setQuestions(qs.filter(q => q.active));
+      }
+    })();
+  }, [editId]);
 
-  const pickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission refusée', 'Autorise l\'accès aux photos dans les réglages.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+  const pick = async (pose: keyof CheckinPhotos) => {
+    const fromCamera = async () => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission refusée', "Autorise l'appareil photo dans les réglages."); return; }
+      const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
+      if (!r.canceled) setPhotos(p => ({ ...p, [pose]: r.assets[0].uri }));
+    };
+    const fromLibrary = async () => {
+      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+      if (!r.canceled) setPhotos(p => ({ ...p, [pose]: r.assets[0].uri }));
+    };
+    if (Platform.OS === 'web') { fromLibrary(); return; }
+    const opts: any[] = [
+      { text: 'Appareil photo', onPress: fromCamera },
+      { text: 'Galerie', onPress: fromLibrary },
+    ];
+    if (photos[pose]) opts.push({ text: 'Supprimer', style: 'destructive', onPress: () => setPhotos(p => ({ ...p, [pose]: undefined })) });
+    opts.push({ text: 'Annuler', style: 'cancel' });
+    Alert.alert(`Photo ${POSES.find(x => x.key === pose)?.label}`, 'Même lumière, même tenue, même distance à chaque bilan.', opts);
   };
 
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission refusée', 'Autorise l\'accès à la caméra dans les réglages.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+  const num = (s: string | undefined) => {
+    const n = parseFloat(String(s ?? '').replace(',', '.'));
+    return isNaN(n) ? undefined : n;
   };
 
   const handleSave = async () => {
-    const checkin: WeeklyCheckin = {
-      id: checkinId || uid(),
-      date,
-      weight: weight ? parseFloat(weight) : undefined,
-      feeling,
-      sleepHours: parseFloat(sleepHours) || 7,
-      sleepQuality,
-      photoUri,
-      notes: notes.trim() || undefined,
-      measurements: Object.keys(measurements).length > 0 ? measurements : undefined,
-    };
-    await saveCheckin(checkin);
-    navigation.goBack();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const keptPhotos: CheckinPhotos = {};
+      for (const p of POSES) {
+        const uri = photos[p.key];
+        if (!uri) continue;
+        const original = existing ? photosOf(existing)[p.key] : undefined;
+        keptPhotos[p.key] = uri === original ? uri : await persistImage(uri, 'checkins');
+      }
+      const measurements: Measurements = {};
+      MEASUREMENT_FIELDS.forEach(f => { const v = num(meas[f.key]); if (v !== undefined) (measurements as any)[f.key] = v; });
+      const now = new Date().toISOString();
+      const checkin: WeeklyCheckin = {
+        id: existing?.id ?? uid(),
+        date: existing?.date ?? today(),
+        weight: num(weight),
+        measurements,
+        photos: keptPhotos,
+        answers,
+        questionsSnapshot: questions.map(q => ({ id: q.id, label: q.label, type: q.type, unit: q.unit })),
+        ...legacyFieldsFromAnswers(answers),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await saveCheckin(checkin);
+      rescheduleCheckinNotifications(await getCheckins()).catch(() => {});
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Enregistrement impossible', e?.message ?? String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const updateMeasurement = (key: keyof Measurements, value: string) => {
-    const num = parseFloat(value);
-    setMeasurements(prev => ({
-      ...prev,
-      [key]: isNaN(num) ? undefined : num,
-    }));
-  };
+  const setAnswer = (id: string, v: CheckinAnswer | undefined) =>
+    setAnswers(a => { const n = { ...a }; if (v === undefined || v === '') delete n[id]; else n[id] = v; return n; });
 
-  const measureFields: { key: keyof Measurements; label: string }[] = [
-    { key: 'chest', label: 'Poitrine (cm)' },
-    { key: 'waist', label: 'Taille (cm)' },
-    { key: 'hips', label: 'Hanches (cm)' },
-    { key: 'leftArm', label: 'Bras gauche (cm)' },
-    { key: 'rightArm', label: 'Bras droit (cm)' },
-    { key: 'leftThigh', label: 'Cuisse gauche (cm)' },
-    { key: 'rightThigh', label: 'Cuisse droite (cm)' },
-  ];
+  const w = num(weight);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{checkinId ? 'Modifier le bilan' : 'Nouveau bilan'}</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>Sauver</Text>
-        </TouchableOpacity>
-      </View>
-
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close" size={24} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>{existing ? 'Modifier le bilan' : 'Nouveau bilan'}</Text>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={handleSave} disabled={saving}>
+            {saving ? <ActivityIndicator color={colors.onPrimary} size="small" /> : <Text style={styles.saveText}>Enregistrer</Text>}
+          </TouchableOpacity>
+        </View>
 
-          {/* Weight */}
-          <Section title="Poids" icon="scale-outline">
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.date}>{formatDateLong(existing?.date ?? today())}</Text>
+
+          {/* Poids */}
+          <View style={styles.card}>
+            <Text style={styles.label}>POIDS</Text>
             <View style={styles.weightRow}>
               <TextInput
-                style={styles.weightInput}
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="decimal-pad"
-                placeholder="Ex: 75.5"
-                placeholderTextColor={colors.textMuted}
+                style={styles.weightInput} value={weight} onChangeText={setWeight}
+                keyboardType="decimal-pad" placeholder={lastWeight ? String(lastWeight) : '0'} placeholderTextColor={colors.textMuted}
               />
               <Text style={styles.weightUnit}>kg</Text>
             </View>
-          </Section>
+            {w !== undefined && lastWeight !== undefined && (
+              <Text style={styles.hint}>
+                {w - lastWeight >= 0 ? '+' : ''}{(w - lastWeight).toFixed(1)} kg depuis le dernier bilan
+              </Text>
+            )}
+            <Text style={styles.hint}>Le matin, à jeun, après être passé aux toilettes.</Text>
+          </View>
 
-          {/* Feeling */}
-          <Section title="Forme générale" icon="happy-outline">
-            <View style={styles.emojiRow}>
-              {FEELING_EMOJIS.map((emoji, i) => {
-                const level = (i + 1) as FeelingLevel;
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.emojiBtn, feeling === level && styles.emojiBtnActive]}
-                    onPress={() => setFeeling(level)}
-                  >
-                    <Text style={styles.emojiChar}>{emoji}</Text>
-                    <Text style={[styles.emojiLabel, feeling === level && { color: colors.primary }]}>
-                      {level}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {/* Photos */}
+          <View style={styles.card}>
+            <Text style={styles.label}>PHOTOS</Text>
+            <View style={styles.photoRow}>
+              {POSES.map(p => (
+                <TouchableOpacity key={p.key} style={styles.photoSlot} onPress={() => pick(p.key)} activeOpacity={0.8}>
+                  {photos[p.key]
+                    ? <Image source={{ uri: photos[p.key] }} style={styles.photo} />
+                    : <Ionicons name="camera-outline" size={26} color={colors.textMuted} />}
+                  <View style={styles.photoTag}><Text style={styles.photoTagText}>{p.label}</Text></View>
+                </TouchableOpacity>
+              ))}
             </View>
-            <Text style={styles.feelingLabel}>{FEELING_LABELS[feeling]}</Text>
-          </Section>
+          </View>
 
-          {/* Sleep */}
-          <Section title="Sommeil" icon="moon-outline">
-            <View style={styles.sleepRow}>
-              <View style={styles.sleepHoursRow}>
+          {/* Mensurations */}
+          <View style={styles.card}>
+            <Text style={styles.label}>MENSURATIONS (cm)</Text>
+            {['chest', 'shoulders', 'waist', 'hips'].map(k => {
+              const f = MEASUREMENT_FIELDS.find(x => x.key === k)!;
+              return (
+                <View key={k} style={styles.measRow}>
+                  <Text style={styles.measLabel}>{f.label}</Text>
+                  <TextInput
+                    style={styles.measInput} value={meas[k] ?? ''} onChangeText={v => setMeas(m => ({ ...m, [k]: v }))}
+                    keyboardType="decimal-pad" placeholder="—" placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+              );
+            })}
+            {[['bicepsL', 'bicepsR', 'Biceps'], ['thighL', 'thighR', 'Cuisses'], ['calfL', 'calfR', 'Mollets']].map(([l, r, label]) => (
+              <View key={label} style={styles.measRow}>
+                <Text style={styles.measLabel}>{label}</Text>
+                <Text style={styles.side}>G</Text>
                 <TextInput
-                  style={styles.sleepInput}
-                  value={sleepHours}
-                  onChangeText={setSleepHours}
-                  keyboardType="decimal-pad"
-                  placeholder="7.5"
-                  placeholderTextColor={colors.textMuted}
+                  style={styles.measInputSmall} value={meas[l] ?? ''} onChangeText={v => setMeas(m => ({ ...m, [l]: v }))}
+                  keyboardType="decimal-pad" placeholder="—" placeholderTextColor={colors.textMuted}
                 />
-                <Text style={styles.sleepUnit}>heures</Text>
+                <Text style={styles.side}>D</Text>
+                <TextInput
+                  style={styles.measInputSmall} value={meas[r] ?? ''} onChangeText={v => setMeas(m => ({ ...m, [r]: v }))}
+                  keyboardType="decimal-pad" placeholder="—" placeholderTextColor={colors.textMuted}
+                />
               </View>
-            </View>
-            <Text style={styles.sleepQualityTitle}>Qualité du sommeil</Text>
-            <View style={styles.emojiRow}>
-              {SLEEP_EMOJIS.map((emoji, i) => {
-                const level = (i + 1) as SleepQuality;
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.emojiBtn, sleepQuality === level && styles.emojiBtnActive]}
-                    onPress={() => setSleepQuality(level)}
-                  >
-                    <Text style={styles.emojiChar}>{emoji}</Text>
-                    <Text style={[styles.emojiLabel, sleepQuality === level && { color: colors.info }]}>
-                      {level}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <Text style={styles.feelingLabel}>{SLEEP_QUALITY_LABELS[sleepQuality]}</Text>
-          </Section>
+            ))}
+            <Text style={styles.hint}>Mesure au même endroit à chaque fois, mètre ruban à plat, sans serrer.</Text>
+          </View>
 
-          {/* Photo */}
-          <Section title="Photo" icon="camera-outline">
-            {photoUri ? (
-              <View>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => setPhotoUri(undefined)}>
-                  <Text style={styles.removePhotoText}>Supprimer la photo</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.photoRow}>
-                <TouchableOpacity style={styles.photoBtn} onPress={takePhoto}>
-                  <Ionicons name="camera-outline" size={24} color={colors.primary} />
-                  <Text style={styles.photoBtnText}>Prendre une photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.photoBtn} onPress={pickPhoto}>
-                  <Ionicons name="images-outline" size={24} color={colors.primary} />
-                  <Text style={styles.photoBtnText}>Depuis la galerie</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </Section>
-
-          {/* Measurements */}
-          <Section
-            title="Mensurations"
-            icon="body-outline"
-            action={
-              <TouchableOpacity onPress={() => setShowMeasurements(v => !v)}>
-                <Ionicons name={showMeasurements ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} />
-              </TouchableOpacity>
-            }
-          >
-            {showMeasurements && (
-              <View style={styles.measureGrid}>
-                {measureFields.map(f => (
-                  <View key={f.key} style={styles.measureField}>
-                    <Text style={styles.measureLabel}>{f.label}</Text>
+          {/* Questionnaire */}
+          <View style={styles.card}>
+            <Text style={styles.label}>QUESTIONNAIRE</Text>
+            {questions.map(q => (
+              <View key={q.id} style={styles.question}>
+                <Text style={styles.qLabel}>{q.label}</Text>
+                {q.type === 'scale' && (
+                  <>
+                    <View style={styles.scaleRow}>
+                      {Array.from({ length: (q.max ?? 5) - (q.min ?? 1) + 1 }, (_, i) => (q.min ?? 1) + i).map(v => (
+                        <TouchableOpacity
+                          key={v}
+                          style={[styles.scaleBtn, answers[q.id] === v && styles.scaleBtnActive]}
+                          onPress={() => setAnswer(q.id, answers[q.id] === v ? undefined : v)}
+                        >
+                          <Text style={[styles.scaleText, answers[q.id] === v && styles.scaleTextActive]}>{v}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {(q.minLabel || q.maxLabel) && (
+                      <View style={styles.scaleLabels}>
+                        <Text style={styles.scaleHint}>{q.minLabel}</Text>
+                        <Text style={styles.scaleHint}>{q.maxLabel}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+                {q.type === 'number' && (
+                  <View style={styles.numRow}>
                     <TextInput
-                      style={styles.measureInput}
-                      value={measurements[f.key] !== undefined ? String(measurements[f.key]) : ''}
-                      onChangeText={v => updateMeasurement(f.key, v)}
-                      keyboardType="decimal-pad"
-                      placeholder="—"
-                      placeholderTextColor={colors.textMuted}
+                      style={styles.numInput}
+                      value={answers[q.id] !== undefined ? String(answers[q.id]) : ''}
+                      onChangeText={v => { const n = num(v); setAnswer(q.id, v === '' ? undefined : (n ?? v)); }}
+                      keyboardType="decimal-pad" placeholder="—" placeholderTextColor={colors.textMuted}
                     />
+                    {q.unit ? <Text style={styles.unit}>{q.unit}</Text> : null}
                   </View>
-                ))}
+                )}
+                {q.type === 'yesno' && (
+                  <View style={styles.scaleRow}>
+                    {[true, false].map(v => (
+                      <TouchableOpacity
+                        key={String(v)}
+                        style={[styles.yesNo, answers[q.id] === v && styles.scaleBtnActive]}
+                        onPress={() => setAnswer(q.id, answers[q.id] === v ? undefined : v)}
+                      >
+                        <Text style={[styles.scaleText, answers[q.id] === v && styles.scaleTextActive]}>{v ? 'Oui' : 'Non'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                {q.type === 'text' && (
+                  <TextInput
+                    style={styles.textInput} multiline
+                    value={answers[q.id] !== undefined ? String(answers[q.id]) : ''}
+                    onChangeText={v => setAnswer(q.id, v)}
+                    placeholder="Ta réponse…" placeholderTextColor={colors.textMuted}
+                  />
+                )}
               </View>
-            )}
-            {!showMeasurements && (
-              <TouchableOpacity onPress={() => setShowMeasurements(true)} style={styles.expandHint}>
-                <Text style={styles.expandHintText}>Touche pour saisir les mensurations</Text>
-              </TouchableOpacity>
-            )}
-          </Section>
-
-          {/* Notes */}
-          <Section title="Ressenti / Notes" icon="chatbubble-outline">
-            <TextInput
-              style={styles.notesInput}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Comment tu te sens cette semaine ? Motivé ? Fatigué ? Notes tes impressions..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </Section>
-
+            ))}
+          </View>
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -283,109 +289,54 @@ export default function NewCheckinScreen() {
   );
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
-
-function Section({ title, icon, children, action }: { title: string; icon: string; children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <View style={sectionStyles.container}>
-      <View style={sectionStyles.header}>
-        <Ionicons name={icon as any} size={18} color={colors.primary} />
-        <Text style={sectionStyles.title}>{title}</Text>
-        {action}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-const sectionStyles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1, borderColor: colors.cardBorder,
-    ...shadows.sm,
-  },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  title: { ...typography.bodyBold, color: colors.text, flex: 1 },
-});
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  title: { ...typography.h3, color: colors.text },
-  saveBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md, paddingVertical: 8,
-    borderRadius: borderRadius.round,
-  },
-  saveBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
+  title: { ...typography.h3, color: colors.text, flex: 1, textAlign: 'center' },
+  saveBtn: { backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: spacing.md, paddingVertical: 8, minWidth: 100, alignItems: 'center' },
+  saveText: { ...typography.bodyBold, color: colors.onPrimary },
   content: { padding: spacing.md },
-
-  // Weight
-  weightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  weightInput: {
-    flex: 1, backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md, paddingVertical: 12,
-    fontSize: 24, fontWeight: '700', color: colors.text, textAlign: 'center',
+  date: { ...typography.h2, color: colors.text, marginBottom: spacing.sm, textTransform: 'capitalize' },
+  card: {
+    backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
+    borderWidth: 1, borderColor: colors.cardBorder, marginBottom: spacing.sm,
   },
+  label: { ...typography.label, color: colors.primaryLight, marginBottom: spacing.sm },
+  hint: { ...typography.caption, color: colors.textMuted, marginTop: 6 },
+  weightRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  weightInput: { ...typography.h1, color: colors.text, minWidth: 120, padding: 0 },
   weightUnit: { ...typography.h3, color: colors.textSecondary },
-
-  // Feeling / Sleep
-  emojiRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  emojiBtn: {
-    alignItems: 'center', padding: spacing.sm,
-    borderRadius: borderRadius.md, borderWidth: 2, borderColor: 'transparent',
-    flex: 1, marginHorizontal: 2,
-  },
-  emojiBtnActive: { borderColor: colors.primary, backgroundColor: colors.surface },
-  emojiChar: { fontSize: 28 },
-  emojiLabel: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
-  feelingLabel: { ...typography.label, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm },
-
-  // Sleep
-  sleepRow: { marginBottom: spacing.sm },
-  sleepHoursRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  sleepInput: {
-    flex: 1, backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md, paddingVertical: 12,
-    fontSize: 24, fontWeight: '700', color: colors.text, textAlign: 'center',
-  },
-  sleepUnit: { ...typography.h3, color: colors.textSecondary },
-  sleepQualityTitle: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
-
-  // Photo
   photoRow: { flexDirection: 'row', gap: spacing.sm },
-  photoBtn: {
-    flex: 1, backgroundColor: colors.surface, borderRadius: borderRadius.lg,
-    padding: spacing.md, alignItems: 'center', gap: spacing.sm,
-    borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary,
+  photoSlot: {
+    flex: 1, aspectRatio: 3 / 4, borderRadius: borderRadius.md, backgroundColor: colors.inputBg,
+    borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
   },
-  photoBtnText: { ...typography.caption, color: colors.primary, textAlign: 'center' },
-  photoPreview: { width: '100%', height: 240, borderRadius: borderRadius.md },
-  removePhotoBtn: { marginTop: spacing.sm, alignItems: 'center' },
-  removePhotoText: { ...typography.label, color: colors.error },
-
-  // Measurements
-  measureGrid: { gap: spacing.sm },
-  measureField: {},
-  measureLabel: { ...typography.label, color: colors.textSecondary, marginBottom: 4 },
-  measureInput: {
-    backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md, paddingVertical: 10,
-    ...typography.body, color: colors.text,
-  },
-  expandHint: { alignItems: 'center' },
-  expandHintText: { ...typography.caption, color: colors.textMuted },
-
-  // Notes
-  notesInput: {
-    backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
-    padding: spacing.md, ...typography.body, color: colors.text, minHeight: 100,
+  photo: { width: '100%', height: '100%' },
+  photoTag: { position: 'absolute', bottom: 6, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  photoTagText: { ...typography.tiny, color: '#FFFFFF' },
+  measRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  measLabel: { ...typography.body, color: colors.textSecondary, flex: 1 },
+  measInput: { ...typography.bodyBold, color: colors.text, backgroundColor: colors.inputBg, borderRadius: borderRadius.sm, width: 90, paddingVertical: 8, textAlign: 'center' },
+  measInputSmall: { ...typography.bodyBold, color: colors.text, backgroundColor: colors.inputBg, borderRadius: borderRadius.sm, width: 64, paddingVertical: 8, textAlign: 'center' },
+  side: { ...typography.caption, color: colors.textMuted },
+  question: { paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  qLabel: { ...typography.bodyBold, color: colors.text, marginBottom: 8 },
+  scaleRow: { flexDirection: 'row', gap: 8 },
+  scaleBtn: { flex: 1, height: 42, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  scaleBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  scaleText: { ...typography.bodyBold, color: colors.textSecondary },
+  scaleTextActive: { color: colors.onPrimary },
+  scaleLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  scaleHint: { ...typography.tiny, color: colors.textMuted },
+  yesNo: { flex: 1, height: 42, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  numRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  numInput: { ...typography.bodyBold, color: colors.text, backgroundColor: colors.inputBg, borderRadius: borderRadius.sm, width: 100, paddingVertical: 8, textAlign: 'center' },
+  unit: { ...typography.body, color: colors.textSecondary },
+  textInput: {
+    ...typography.body, color: colors.text, backgroundColor: colors.inputBg, borderRadius: borderRadius.md,
+    padding: spacing.sm, minHeight: 64, textAlignVertical: 'top',
   },
 });

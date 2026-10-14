@@ -135,25 +135,55 @@ export type FeelingLevel = 1 | 2 | 3 | 4 | 5;
 export type SleepQuality = 1 | 2 | 3 | 4 | 5;
 
 export interface Measurements {
-  chest?: number;
-  waist?: number;
-  hips?: number;
-  leftArm?: number;
-  rightArm?: number;
-  leftThigh?: number;
-  rightThigh?: number;
+  chest?: number;      // poitrine
+  shoulders?: number;  // épaules
+  waist?: number;      // tour de taille
+  hips?: number;       // hanches
+  bicepsL?: number; bicepsR?: number;
+  thighL?: number;  thighR?: number;
+  calfL?: number;   calfR?: number;
+  // Anciens champs (bilans créés avant oct. 2026) — lus pour compatibilité
+  leftArm?: number; rightArm?: number; leftThigh?: number; rightThigh?: number;
 }
+
+export interface CheckinPhotos {
+  front?: string;
+  back?: string;
+  side?: string;
+}
+
+export type QuestionType = 'scale' | 'number' | 'text' | 'yesno';
+
+export interface CheckinQuestion {
+  id: string;
+  label: string;
+  type: QuestionType;
+  min?: number;          // échelle : 1
+  max?: number;          // échelle : 5
+  minLabel?: string;     // libellé du minimum (ex. « très faible »)
+  maxLabel?: string;
+  unit?: string;         // nombre : unité (h, %, …)
+  active: boolean;
+  builtin?: boolean;     // question du questionnaire générique
+}
+
+export type CheckinAnswer = number | string | boolean;
 
 export interface WeeklyCheckin {
   id: string;
   date: string;
   weight?: number;
   measurements?: Measurements;
-  photoUri?: string;
+  photoUri?: string;            // ancien champ (1 photo)
+  photos?: CheckinPhotos;       // face / dos / profil
   feeling: FeelingLevel;
   sleepHours: number;
   sleepQuality: SleepQuality;
+  answers?: Record<string, CheckinAnswer>;
+  questionsSnapshot?: { id: string; label: string; type: QuestionType; unit?: string }[];
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ─── Goals ────────────────────────────────────────────────────────────────────
@@ -201,4 +231,6 @@ export type WorkoutStackParamList = {
 export type BodyStackParamList = {
   BodyList: undefined;
   NewCheckin: { checkinId?: string };
+  CheckinCompare: { fromId?: string; toId?: string } | undefined;
+  CheckinSettings: undefined;
 };

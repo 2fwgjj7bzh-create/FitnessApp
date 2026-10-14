@@ -20,6 +20,10 @@ import NutritionScreen from '../screens/NutritionScreen';
 import BodyListScreen from '../screens/BodyListScreen';
 import NewCheckinScreen from '../screens/NewCheckinScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import CheckinCompareScreen from '../screens/CheckinCompareScreen';
+import CheckinSettingsScreen from '../screens/CheckinSettingsScreen';
+import { getCheckins } from '../storage';
+import { rescheduleCheckinNotifications } from '../lib/checkin';
 import EbookLibraryScreen from '../screens/EbookLibraryScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
@@ -50,6 +54,8 @@ function BodyNavigator() {
     <BodyStack.Navigator screenOptions={{ headerShown: false }}>
       <BodyStack.Screen name="BodyList"   component={BodyListScreen} />
       <BodyStack.Screen name="NewCheckin" component={NewCheckinScreen} />
+      <BodyStack.Screen name="CheckinCompare" component={CheckinCompareScreen} />
+      <BodyStack.Screen name="CheckinSettings" component={CheckinSettingsScreen} />
     </BodyStack.Navigator>
   );
 }
@@ -129,10 +135,14 @@ const BYPASS_AUTH = true;
 function RootNavigator() {
   const { session, loading } = useAuth();
 
+  // Notifications de bilan : on recharge les prochaines à chaque ouverture
+  React.useEffect(() => { getCheckins().then(c => rescheduleCheckinNotifications(c)).catch(() => {}); }, []);
+
   if (BYPASS_AUTH) {
     return (
       <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         <RootStack.Screen name="Main" component={MainTabNavigator} />
+        <RootStack.Screen name="Bilan" component={BodyNavigator} options={{ animation: 'slide_from_right' }} />
       </RootStack.Navigator>
     );
   }
@@ -148,7 +158,10 @@ function RootNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
       {session ? (
-        <RootStack.Screen name="Main" component={MainTabNavigator} />
+        <>
+          <RootStack.Screen name="Main" component={MainTabNavigator} />
+          <RootStack.Screen name="Bilan" component={BodyNavigator} options={{ animation: 'slide_from_right' }} />
+        </>
       ) : (
         <RootStack.Screen name="Auth" component={AuthNavigator} />
       )}

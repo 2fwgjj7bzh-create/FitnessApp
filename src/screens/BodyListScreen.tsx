@@ -1,266 +1,296 @@
-import React, { useCallback, useState } from 'react';
+/**
+ * Bilans : planification, évolution (poids, mensurations, réponses), comparaison photos
+ * et historique.
+ */
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Image, RefreshControl,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, RefreshControl, Dimensions, Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius, typography, shadows } from '../theme';
+import { LineChart } from 'react-native-chart-kit';
+import { colors, spacing, borderRadius, typography } from '../theme';
 import { getCheckins, deleteCheckin } from '../storage';
-import { formatDateLong, FEELING_LABELS, SLEEP_QUALITY_LABELS } from '../utils/helpers';
-import { WeeklyCheckin, BodyStackParamList } from '../types';
+import { formatDate, formatDateLong, localDateStr } from '../utils/helpers';
+import { WeeklyCheckin, BodyStackParamList, CheckinQuestion } from '../types';
+import {
+  getQuestions, getSchedule, describeSchedule, nextOccurrences, dueDateFor, answerFor,
+  MEASUREMENT_FIELDS, normalizeMeasurements, photosOf, CheckinSchedule,
+} from '../lib/checkin';
 
-type NavProp = NativeStackNavigationProp<BodyStackParamList, 'BodyList'>;
+type Nav = NativeStackNavigationProp<BodyStackParamList, 'BodyList'>;
+const W = Dimensions.get('window').width;
 
-const FEELING_EMOJIS: Record<number, string> = { 1: '😞', 2: '😕', 3: '😐', 4: '😊', 5: '🤩' };
-const SLEEP_EMOJIS: Record<number, string> = { 1: '😴', 2: '😪', 3: '😑', 4: '😌', 5: '✨' };
+interface Metric { key: string; label: string; unit: string; get: (c: WeeklyCheckin) => number | undefined }
 
 export default function BodyListScreen() {
-  const navigation = useNavigation<NavProp>();
+  const navigation = useNavigation<Nav>();
   const [checkins, setCheckins] = useState<WeeklyCheckin[]>([]);
+  const [questions, setQuestions] = useState<CheckinQuestion[]>([]);
+  const [schedule, setSchedule] = useState<CheckinSchedule | null>(null);
+  const [metric, setMetric] = useState('weight');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await getCheckins();
-    setCheckins(data);
+    const [c, q, s] = await Promise.all([getCheckins(), getQuestions(), getSchedule()]);
+    setCheckins([...c].sort((a, b) => b.date.localeCompare(a.date)));
+    setQuestions(q);
+    setSchedule(s);
   }, []);
-
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  };
+  const metrics: Metric[] = useMemo(() => {
+    const base: Metric[] = [{ key: 'weight', label: 'Poids', unit: 'kg', get: c => c.weight }];
+    MEASUREMENT_FIELDS.forEach(f => base.push({
+      key: f.key, label: f.side ? `${f.label} ${f.side}` : f.label, unit: 'cm',
+      get: c => normalizeMeasurements(c.measurements)[f.key],
+    }));
+    questions.filter(q => q.type === 'scale' || q.type === 'number').forEach(q => base.push({
+      key: 'q:' + q.id, label: q.label, unit: q.type === 'scale' ? `/${q.max ?? 5}` : (q.unit ?? ''),
+      get: c => { const v = answerFor(c, q.id); const n = Number(v); return v === undefined || isNaN(n) || n === 0 && q.id === 'sleep_hours' ? undefined : n; },
+    }));
+    // ne garder que les métriques renseignées au moins une fois
+    return base.filter(m => m.key === 'weight' || checkins.some(c => m.get(c) !== undefined));
+  }, [questions, checkins]);
+
+  const current = metrics.find(m => m.key === metric) ?? metrics[0];
+  const series = useMemo(() => [...checkins].reverse().filter(c => current.get(c) !== undefined).slice(-12), [checkins, current]);
+
+  const withWeight = checkins.filter(c => c.weight);
+  const latestW = withWeight[0]?.weight;
+  const firstW = withWeight[withWeight.length - 1]?.weight;
+
+  const due = schedule ? dueDateFor(schedule) : null;
+  const dueDone = due ? checkins.some(c => c.date >= localDateStr(due)) : true;
+  const next = schedule?.enabled ? nextOccurrences(schedule, 1)[0] : null;
 
   const handleDelete = (id: string) => {
+    const go = async () => { await deleteCheckin(id); load(); };
+    if (Platform.OS === 'web') { if (window.confirm('Supprimer ce bilan ?')) go(); return; }
     Alert.alert('Supprimer', 'Supprimer ce bilan ?', [
       { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer', style: 'destructive',
-        onPress: async () => {
-          await deleteCheckin(id);
-          load();
-        },
-      },
+      { text: 'Supprimer', style: 'destructive', onPress: go },
     ]);
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={styles.title}>Bilans</Text>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('CheckinSettings')}>
+          <Ionicons name="settings-outline" size={20} color={colors.primaryLight} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('NewCheckin', {})}>
-          <Ionicons name="add" size={22} color="#FFFFFF" />
+          <Ionicons name="add" size={22} color={colors.onPrimary} />
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={checkins}
-        keyExtractor={c => c.id}
+      <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        renderItem={({ item: c, index: i }) => (
-          <CheckinCard
-            checkin={c}
-            isFirst={i === 0}
-            prevCheckin={i < checkins.length - 1 ? checkins[i + 1] : null}
-            expanded={expanded === c.id}
-            onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
-            onEdit={() => navigation.navigate('NewCheckin', { checkinId: c.id })}
-            onDelete={() => handleDelete(c.id)}
-          />
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.primary} />}
+      >
+        {/* Planification */}
+        {due && !dueDone ? (
+          <TouchableOpacity style={styles.dueCard} onPress={() => navigation.navigate('NewCheckin', {})} activeOpacity={0.85}>
+            <Ionicons name="alarm-outline" size={22} color={colors.onPrimary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dueTitle}>Ton bilan est à faire</Text>
+              <Text style={styles.dueSub}>Prévu le {formatDate(localDateStr(due))} · 5 minutes</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.onPrimary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.scheduleCard} onPress={() => navigation.navigate('CheckinSettings')} activeOpacity={0.85}>
+            <Ionicons name="calendar-outline" size={20} color={colors.primaryLight} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.scheduleTitle}>{schedule ? describeSchedule(schedule) : '…'}</Text>
+              <Text style={styles.scheduleSub}>
+                {next ? `Prochain bilan : ${formatDate(localDateStr(next))}` : 'Planifie tes bilans pour recevoir un rappel'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         )}
-        ListEmptyComponent={
+
+        {/* Chiffres clés */}
+        <View style={styles.statsRow}>
+          <Stat label="Bilans" value={String(checkins.length)} />
+          <Stat label="Poids actuel" value={latestW ? `${latestW}` : '—'} unit="kg" />
+          <Stat
+            label="Depuis le début"
+            value={latestW && firstW && withWeight.length > 1 ? `${latestW - firstW >= 0 ? '+' : ''}${(latestW - firstW).toFixed(1)}` : '—'}
+            unit="kg"
+          />
+        </View>
+
+        {/* Évolution */}
+        <View style={styles.card}>
+          <Text style={styles.label}>ÉVOLUTION</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+            {metrics.map(m => (
+              <TouchableOpacity key={m.key} style={[styles.chip, current.key === m.key && styles.chipActive]} onPress={() => setMetric(m.key)}>
+                <Text style={[styles.chipText, current.key === m.key && styles.chipTextActive]} numberOfLines={1}>{m.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {series.length >= 2 ? (
+            <LineChart
+              data={{
+                labels: series.map(c => { const d = new Date(c.date + 'T12:00:00'); return `${d.getDate()}/${d.getMonth() + 1}`; }),
+                datasets: [{ data: series.map(c => current.get(c) as number) }],
+              }}
+              width={W - spacing.md * 4 - 2}
+              height={190}
+              yAxisSuffix={current.unit === 'kg' || current.unit === 'cm' ? '' : ''}
+              chartConfig={{
+                backgroundColor: colors.card, backgroundGradientFrom: colors.card, backgroundGradientTo: colors.card,
+                decimalPlaces: 1, color: (o = 1) => `rgba(200, 16, 46, ${o})`, labelColor: () => colors.textSecondary,
+                propsForDots: { r: '4', strokeWidth: '2', stroke: colors.primary },
+                propsForBackgroundLines: { stroke: colors.border, strokeDasharray: '4' },
+              }}
+              bezier
+              style={{ marginLeft: -12 }}
+            />
+          ) : (
+            <Text style={styles.empty}>Il faut au moins 2 bilans avec « {current.label} » pour tracer la courbe.</Text>
+          )}
+          {series.length >= 2 && (
+            <Text style={styles.foot}>
+              {series.length} bilans · {current.label} : {current.get(series[0])} → {current.get(series[series.length - 1])} {current.unit}
+            </Text>
+          )}
+        </View>
+
+        {/* Comparaison */}
+        {checkins.filter(c => Object.values(photosOf(c)).some(Boolean)).length >= 2 && (
+          <TouchableOpacity style={styles.compareBtn} onPress={() => navigation.navigate('CheckinCompare')}>
+            <Ionicons name="git-compare-outline" size={18} color={colors.primaryLight} />
+            <Text style={styles.compareText}>Comparer les photos avant / après</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Historique */}
+        <Text style={styles.section}>HISTORIQUE</Text>
+        {checkins.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="body-outline" size={56} color={colors.textMuted} />
+            <Ionicons name="body-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>Aucun bilan</Text>
-            <Text style={styles.emptySubtitle}>Commence à suivre tes progrès corporels</Text>
             <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('NewCheckin', {})}>
-              <Text style={styles.emptyBtnText}>Créer mon premier bilan</Text>
+              <Text style={styles.emptyBtnText}>Faire mon premier bilan</Text>
             </TouchableOpacity>
           </View>
-        }
-        ListFooterComponent={checkins.length > 0 ? <View style={{ height: 20 }} /> : null}
-      />
+        )}
+        {checkins.map((c, i) => {
+          const prev = checkins.slice(i + 1).find(x => x.weight);
+          const diff = c.weight && prev?.weight ? c.weight - prev.weight : null;
+          const ph = photosOf(c);
+          const m = normalizeMeasurements(c.measurements);
+          const open = expanded === c.id;
+          return (
+            <TouchableOpacity key={c.id} style={styles.item} onPress={() => setExpanded(open ? null : c.id)} activeOpacity={0.85}>
+              <View style={styles.itemTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemDate}>{formatDateLong(c.date)}</Text>
+                  <Text style={styles.itemSub}>
+                    {c.weight ? `${c.weight} kg` : 'Poids non renseigné'}
+                    {diff !== null ? `  (${diff >= 0 ? '+' : ''}${diff.toFixed(1)})` : ''}
+                  </Text>
+                </View>
+                <View style={styles.thumbs}>
+                  {(['front', 'back', 'side'] as const).map(k => ph[k] ? <Image key={k} source={{ uri: ph[k] }} style={styles.thumb} /> : null)}
+                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('NewCheckin', { checkinId: c.id })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(c.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
+              </View>
+              {open && (
+                <View style={styles.detail}>
+                  {MEASUREMENT_FIELDS.filter(f => m[f.key]).map(f => (
+                    <Text key={f.key} style={styles.detailLine}>{f.label}{f.side ? ` ${f.side}` : ''} : {m[f.key]} cm</Text>
+                  ))}
+                  {(c.questionsSnapshot ?? questions).map(q => {
+                    const v = answerFor(c, q.id);
+                    if (v === undefined || v === '') return null;
+                    const txt = typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : `${v}${'unit' in q && q.unit ? ` ${q.unit}` : ''}`;
+                    return <Text key={q.id} style={styles.detailLine}><Text style={{ color: colors.textMuted }}>{q.label} : </Text>{txt}</Text>;
+                  })}
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Checkin Card ─────────────────────────────────────────────────────────────
-
-interface CheckinCardProps {
-  checkin: WeeklyCheckin;
-  isFirst: boolean;
-  prevCheckin: WeeklyCheckin | null;
-  expanded: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-function CheckinCard({ checkin, isFirst, prevCheckin, expanded, onToggle, onEdit, onDelete }: CheckinCardProps) {
-  const weightDiff = checkin.weight && prevCheckin?.weight
-    ? (checkin.weight - prevCheckin.weight).toFixed(1)
-    : null;
-
-  const weightDiffNum = weightDiff ? parseFloat(weightDiff) : null;
-
+function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onToggle} activeOpacity={0.8}>
-      {isFirst && <View style={styles.latestBadge}><Text style={styles.latestBadgeText}>Dernier</Text></View>}
-
-      {/* Summary row */}
-      <View style={styles.cardTop}>
-        <View style={styles.cardLeft}>
-          <Text style={styles.cardDate}>{formatDateLong(checkin.date)}</Text>
-          <View style={styles.cardStats}>
-            {checkin.weight && (
-              <View style={styles.cardStat}>
-                <Text style={styles.cardStatValue}>{checkin.weight} kg</Text>
-                {weightDiffNum !== null && (
-                  <Text style={[styles.weightDiff, { color: weightDiffNum <= 0 ? colors.success : colors.secondary }]}>
-                    {weightDiffNum > 0 ? '+' : ''}{weightDiff}
-                  </Text>
-                )}
-              </View>
-            )}
-            <Text style={styles.feelingEmoji}>{FEELING_EMOJIS[checkin.feeling]}</Text>
-            <View style={styles.sleepStat}>
-              <Ionicons name="moon-outline" size={14} color={colors.info} />
-              <Text style={styles.sleepText}>{checkin.sleepHours}h</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.cardActions}>
-          <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
-          </TouchableOpacity>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
-        </View>
-      </View>
-
-      {/* Expanded details */}
-      {expanded && (
-        <View style={styles.expanded}>
-          {checkin.photoUri && (
-            <Image source={{ uri: checkin.photoUri }} style={styles.photo} resizeMode="cover" />
-          )}
-
-          {/* Feeling & Sleep */}
-          <View style={styles.detailRow}>
-            <DetailItem icon="happy-outline" label="Forme" value={FEELING_LABELS[checkin.feeling]} emoji={FEELING_EMOJIS[checkin.feeling]} color={colors.warning} />
-            <DetailItem icon="moon-outline" label="Sommeil" value={`${checkin.sleepHours}h — ${SLEEP_QUALITY_LABELS[checkin.sleepQuality]}`} emoji={SLEEP_EMOJIS[checkin.sleepQuality]} color={colors.info} />
-          </View>
-
-          {/* Measurements */}
-          {checkin.measurements && Object.keys(checkin.measurements).length > 0 && (
-            <View style={styles.measurements}>
-              <Text style={styles.measureTitle}>Mensurations</Text>
-              <View style={styles.measureGrid}>
-                {(Object.entries(checkin.measurements) as [string, number | undefined][]).map(([key, val]) => {
-                  if (!val) return null;
-                  const labels: Record<string, string> = {
-                    chest: 'Poitrine', waist: 'Taille', hips: 'Hanches',
-                    leftArm: 'Bras G', rightArm: 'Bras D',
-                    leftThigh: 'Cuisse G', rightThigh: 'Cuisse D',
-                  };
-                  return (
-                    <View key={key} style={styles.measureItem}>
-                      <Text style={styles.measureValue}>{val} cm</Text>
-                      <Text style={styles.measureLabel}>{labels[key] ?? key}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
-          {checkin.notes ? (
-            <View style={styles.noteBox}>
-              <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
-              <Text style={styles.noteText}>{checkin.notes}</Text>
-            </View>
-          ) : null}
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-function DetailItem({ icon, label, value, emoji, color }: { icon: string; label: string; value: string; emoji: string; color: string }) {
-  return (
-    <View style={detailStyles.item}>
-      <Ionicons name={icon as any} size={16} color={color} />
-      <Text style={detailStyles.label}>{label}</Text>
-      <Text style={detailStyles.value}>{emoji} {value}</Text>
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}{unit && value !== '—' ? <Text style={styles.statUnit}> {unit}</Text> : null}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-const detailStyles = StyleSheet.create({
-  item: { flex: 1, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.sm },
-  label: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
-  value: { ...typography.label, color: colors.text, marginTop: 2 },
-});
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm,
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  title: { ...typography.h1, fontSize: 38, color: colors.text, flex: 1 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  content: { padding: spacing.md, paddingTop: 0 },
+  dueCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.sm,
   },
-  title: { ...typography.h1, color: colors.text },
-  addBtn: {
-    backgroundColor: colors.primary, width: 40, height: 40,
-    borderRadius: borderRadius.round, justifyContent: 'center', alignItems: 'center',
+  dueTitle: { ...typography.bodyBold, color: colors.onPrimary },
+  dueSub: { ...typography.caption, color: colors.onPrimary, opacity: 0.85 },
+  scheduleCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.card,
+    borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder,
   },
-  content: { paddingHorizontal: spacing.md },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  emptyTitle: { ...typography.h3, color: colors.textSecondary, marginTop: spacing.lg },
-  emptySubtitle: { ...typography.body, color: colors.textMuted, marginTop: spacing.xs, textAlign: 'center' },
-  emptyBtn: {
-    marginTop: spacing.lg, backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.round,
+  scheduleTitle: { ...typography.bodyBold, color: colors.text },
+  scheduleSub: { ...typography.caption, color: colors.textMuted },
+  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  stat: { flex: 1, backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.cardBorder },
+  statValue: { ...typography.h2, color: colors.text },
+  statUnit: { ...typography.caption, color: colors.textMuted },
+  statLabel: { ...typography.tiny, color: colors.textMuted },
+  card: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.cardBorder, marginBottom: spacing.sm, overflow: 'hidden' },
+  label: { ...typography.label, color: colors.primaryLight, marginBottom: spacing.sm },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.border, marginRight: 6, maxWidth: 220 },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...typography.caption, color: colors.textSecondary },
+  chipTextActive: { color: colors.onPrimary },
+  empty: { ...typography.caption, color: colors.textMuted, paddingVertical: spacing.lg, textAlign: 'center' },
+  foot: { ...typography.tiny, color: colors.textMuted, marginTop: 4 },
+  compareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: spacing.md,
+    borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.primary + '66', marginBottom: spacing.sm,
   },
-  emptyBtnText: { ...typography.bodyBold, color: '#FFFFFF' },
-  card: {
-    backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
-    marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.cardBorder, ...shadows.sm,
-    overflow: 'hidden',
-  },
-  latestBadge: {
-    position: 'absolute', top: 0, right: 0,
-    backgroundColor: colors.primary, paddingHorizontal: spacing.sm, paddingVertical: 3,
-    borderTopRightRadius: borderRadius.lg, borderBottomLeftRadius: borderRadius.sm,
-  },
-  latestBadgeText: { ...typography.tiny, color: '#FFFFFF' },
-  cardTop: { flexDirection: 'row', alignItems: 'center' },
-  cardLeft: { flex: 1 },
-  cardDate: { ...typography.label, color: colors.textSecondary },
-  cardStats: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
-  cardStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardStatValue: { ...typography.bodyBold, color: colors.text },
-  weightDiff: { ...typography.caption },
-  feelingEmoji: { fontSize: 20 },
-  sleepStat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  sleepText: { ...typography.label, color: colors.info },
-  cardActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  expanded: { marginTop: spacing.md, gap: spacing.sm },
-  photo: { width: '100%', height: 200, borderRadius: borderRadius.md },
-  detailRow: { flexDirection: 'row', gap: spacing.sm },
-  measurements: { backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md },
-  measureTitle: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
-  measureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  measureItem: { backgroundColor: colors.card, borderRadius: borderRadius.sm, padding: spacing.sm, minWidth: 80, alignItems: 'center' },
-  measureValue: { ...typography.bodyBold, color: colors.text },
-  measureLabel: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
-  noteBox: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.sm },
-  noteText: { ...typography.caption, color: colors.textSecondary, flex: 1 },
+  compareText: { ...typography.bodyBold, color: colors.primaryLight },
+  section: { ...typography.label, color: colors.textMuted, marginTop: spacing.md, marginBottom: spacing.sm },
+  item: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.cardBorder, marginBottom: spacing.sm },
+  itemTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  itemDate: { ...typography.bodyBold, color: colors.text, textTransform: 'capitalize' },
+  itemSub: { ...typography.caption, color: colors.textSecondary },
+  thumbs: { flexDirection: 'row', gap: 4 },
+  thumb: { width: 30, height: 40, borderRadius: 4 },
+  detail: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderLight, gap: 4 },
+  detailLine: { ...typography.caption, color: colors.text },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  emptyTitle: { ...typography.h3, color: colors.textSecondary },
+  emptyBtn: { backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: spacing.lg, paddingVertical: 12 },
+  emptyBtnText: { ...typography.bodyBold, color: colors.onPrimary },
 });

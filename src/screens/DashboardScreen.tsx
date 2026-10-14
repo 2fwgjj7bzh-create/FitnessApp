@@ -14,6 +14,8 @@ import {
 } from '../storage';
 import { calcDayNutrition } from '../utils/helpers';
 import NeatCard from '../components/NeatCard';
+import { getSchedule, dueDateFor } from '../lib/checkin';
+import { localDateStr } from '../utils/helpers';
 import { today, formatDate } from '../utils/helpers';
 import { Workout, WeeklyCheckin, UserGoals, RootTabParamList, WorkoutStackParamList, WorkoutProgram, UserProfile } from '../types';
 
@@ -35,6 +37,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [todayProgram, setTodayProgram] = useState<WorkoutProgram | null>(null);
   const [profile, setProfile] = useState<UserProfile>({ firstName: '' });
+  const [checkinDue, setCheckinDue] = useState(false);
 
   // Modal states
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -83,6 +86,9 @@ export default function DashboardScreen() {
       setTodayProtein(0);
     }
     setLatestCheckin(checkins[0] ?? null);
+    const sched = await getSchedule();
+    const due = dueDateFor(sched);
+    setCheckinDue(!!due && !checkins.some(c => c.date >= localDateStr(due)));
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -136,10 +142,11 @@ export default function DashboardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.startBtn}
-            onPress={() => (navigation as any).navigate('WorkoutTab', { screen: 'WorkoutList' })}
+            onPress={() => (navigation as any).navigate('Bilan')}
           >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text style={styles.startBtnText}>Séance</Text>
+            <Ionicons name="clipboard-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.startBtnText}>Bilan</Text>
+            {checkinDue && <View style={styles.dueDot} />}
           </TouchableOpacity>
         </View>
 
@@ -236,7 +243,7 @@ export default function DashboardScreen() {
         {latestCheckin && (
           <>
             <Text style={styles.sectionTitle}>Dernier bilan</Text>
-            <TouchableOpacity style={styles.checkinCard} onPress={() => (navigation as any).navigate('BodyTab')}>
+            <TouchableOpacity style={styles.checkinCard} onPress={() => (navigation as any).navigate('Bilan')}>
               <View style={styles.checkinRow}>
                 {latestCheckin.weight && (
                   <View style={styles.checkinStat}>
@@ -470,6 +477,7 @@ const styles = StyleSheet.create({
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   greeting: { ...typography.h3, color: colors.text },
   date: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  dueDot: { position: 'absolute', top: -3, right: -3, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.warning, borderWidth: 2, borderColor: colors.background },
   startBtn: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.primary,
